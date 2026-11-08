@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,7 +9,7 @@ namespace ArrowPuzzle
     {
         public override bool IsPopup { get { return true; } }
 
-        SwitchView sound;
+        SwitchView sound, music;
 
         protected override void Build()
         {
@@ -41,19 +42,9 @@ namespace ArrowPuzzle
             }, Icon.Restart, 24f, Weight.Semi);
             Ui.Size(restart, 0f, 60f);
 
-            // 4. Sound row: icon + label left, switch right
-            var row = Ui.Img(card.transform, "SoundRow", Theme.Rounded, Theme.Bg, 20f);
-            row.raycastTarget = false;
-            Ui.Size(row, 0f, 60f);
-
-            var icon = Icons.Make(row.transform, Icon.Sound, Theme.Ink, 24f);
-            Ui.PlaceD(icon, new Vector2(0f, 0.5f), new Vector2(20f, 0f), new Vector2(24f, 24f));
-
-            var label = Ui.Label(row.transform, "Sound", 20f, Theme.Ink, Weight.Semi, TextAnchor.MiddleLeft);
-            Ui.PlaceD(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(20f + 24f + 10f, 0f), new Vector2(160f, 60f));
-
-            sound = Ui.Switch(row.transform, () => Save.Sound, v => Save.Sound = v);
-            Ui.PlaceD((RectTransform)sound.transform, new Vector2(1f, 0.5f), new Vector2(-18f, 0f), new Vector2(52f, 30f));
+            // 4. Sound and Music rows
+            sound = SwitchRow(card.transform, Icon.Sound, "Sound", () => Save.Sound, v => Save.Sound = v);
+            music = SwitchRow(card.transform, Icon.Music, "Music", () => Save.Music, MusicPlayer.SetEnabled);
 
             // 5. Home
             var home = Ui.Btn(card.transform, "Home", Theme.Bg, Theme.Ink, 20f, 20f, Theme.CardShadow, 0f,
@@ -61,10 +52,29 @@ namespace ArrowPuzzle
             Ui.Size(home, 0f, 60f);
         }
 
+        /// <summary>Icon + label left, switch right.</summary>
+        static SwitchView SwitchRow(Transform card, Icon iconId, string text, Func<bool> get, Action<bool> set)
+        {
+            var row = Ui.Img(card, text + "Row", Theme.Rounded, Theme.Bg, 20f);
+            row.raycastTarget = false;
+            Ui.Size(row, 0f, 60f);
+
+            var icon = Icons.Make(row.transform, iconId, Theme.Ink, 24f);
+            Ui.PlaceD(icon, new Vector2(0f, 0.5f), new Vector2(20f, 0f), new Vector2(24f, 24f));
+
+            var label = Ui.Label(row.transform, text, 20f, Theme.Ink, Weight.Semi, TextAnchor.MiddleLeft);
+            Ui.PlaceD(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(20f + 24f + 10f, 0f), new Vector2(160f, 60f));
+
+            var sw = Ui.Switch(row.transform, get, set);
+            Ui.PlaceD((RectTransform)sw.transform, new Vector2(1f, 0.5f), new Vector2(-18f, 0f), new Vector2(52f, 30f));
+            return sw;
+        }
+
         public override void OnShow()
         {
             Time.timeScale = 0f;
             sound.Refresh();
+            music.Refresh();
         }
 
         /// <summary>Every way of closing (Resume, Restart, Home, back button) ends here.</summary>

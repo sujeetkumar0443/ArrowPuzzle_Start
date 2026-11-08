@@ -22,12 +22,27 @@ namespace ArrowPuzzle
         public GameMode CurrentMode = GameMode.Classic;
 
         /// <summary>
-        /// Level-cleared hand-off to the level map: set by ScreenGame when a win raised the mode's unlocked level,
-        /// played (and cleared) by ScreenLevels.
+        /// Level-cleared hand-off to the map: set by ScreenGame.OnWon on every win (global level, stars of this win,
+        /// stars saved before it (0 = first win), whether the win unlocked the next level). Nothing reads it since the map Home was removed;
+        /// kept for compatibility.
         /// </summary>
         public bool UnlockPending;
         public int ClearedLevel, ClearedStars;
         public GameMode ClearedMode = GameMode.Classic;
+        public int ClearedPrevStars;
+        public bool ClearedUnlocked;
+
+        /// <summary>Unused since the map Home was removed (kept for compatibility).</summary>
+        public bool MapFromNext;
+
+        /// <summary>
+        /// Win hand-off from the Bonus Spin popup to Level complete: 0 = No thanks (the base reward only), otherwise
+        /// the multiplier whose rewarded ad was completed. ScreenGame.OnWon resets it before the bonus popup opens.
+        /// </summary>
+        public int BonusMult;
+
+        /// <summary>A rewarded ad (the bonus wheel) was just watched: the next NEXT / Home skips its interstitial once.</summary>
+        public bool SkipInterstitialOnce;
 
         /// <summary>Lives left when the last level was won (Game sets it, the Win popup reads it for the stars).</summary>
         public int ResultLives = 3;
@@ -58,7 +73,7 @@ namespace ArrowPuzzle
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
         {
-            if (FindFirstObjectByType<GameApp>() != null) return;
+            if (FindAnyObjectByType<GameApp>() != null) return;
             var go = new GameObject("ArrowPuzzleApp");
             go.AddComponent<GameApp>();
             DontDestroyOnLoad(go);
@@ -73,7 +88,8 @@ namespace ArrowPuzzle
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Theme.Init();
             Sfx.Init(gameObject);
-            Ads.Init(); // once per launch; never throws
+            MusicPlayer.Init(gameObject);
+            AppStartup.Begin(); // UMP consent (Firebase starts in parallel) -> Ads.Init as soon as ads may be requested; never blocks or throws
             EnsureCamera();
             EnsureEventSystem();
             BuildCanvas();
@@ -87,7 +103,7 @@ namespace ArrowPuzzle
 
         void EnsureCamera()
         {
-            if (FindFirstObjectByType<Camera>() != null) return;
+            if (FindAnyObjectByType<Camera>() != null) return;
             var go = new GameObject("Camera");
             go.transform.SetParent(transform, false);
             var cam = go.AddComponent<Camera>();
@@ -99,7 +115,7 @@ namespace ArrowPuzzle
 
         void EnsureEventSystem()
         {
-            if (FindFirstObjectByType<EventSystem>() != null) return;
+            if (FindAnyObjectByType<EventSystem>() != null) return;
             var go = new GameObject("EventSystem");
             go.transform.SetParent(transform, false);
             go.AddComponent<EventSystem>();
@@ -199,6 +215,7 @@ namespace ArrowPuzzle
 
         void Show(Type t)
         {
+            CrashReporter.Breadcrumb(t.Name);
             CloseAllPopups();
             if (current != null && current != t) PreviousScreen = current.Name;
             foreach (var kv in entries)
@@ -224,6 +241,7 @@ namespace ArrowPuzzle
             Entry e;
             if (!entries.TryGetValue(t, out e)) return;
             if (!openPopups.Contains(t)) openPopups.Add(t);
+            CrashReporter.Breadcrumb(t.Name);
             e.container.transform.SetAsLastSibling();
             e.container.SetActive(true);
             e.screen.OnShow();
@@ -241,6 +259,7 @@ namespace ArrowPuzzle
             {
                 if (kv.Key.Name != typeName || !kv.Value.screen.IsPopup) continue;
                 if (!openPopups.Contains(kv.Key)) openPopups.Add(kv.Key);
+                CrashReporter.Breadcrumb(kv.Key.Name);
                 kv.Value.container.transform.SetAsLastSibling();
                 kv.Value.container.SetActive(true);
                 kv.Value.screen.OnShow();
@@ -263,6 +282,7 @@ namespace ArrowPuzzle
             openPopups.Remove(t);
             if (e.container.activeSelf)
             {
+                CrashReporter.Breadcrumb("close " + t.Name);
                 e.container.SetActive(false);
                 e.screen.OnHide();
             }
@@ -308,7 +328,7 @@ namespace ArrowPuzzle
             }
             Entry e;
             if (current != null && entries.TryGetValue(current, out e) && e.screen.OnBack()) return;
-            if (current != null && current.Name == "ScreenHome") Application.Quit();
+            if (current != null && current.Name == "ScreenHome") Application.Quit(); // Home is the start screen
         }
 
         // ------------------------------------------------------------------ foundation smoke test

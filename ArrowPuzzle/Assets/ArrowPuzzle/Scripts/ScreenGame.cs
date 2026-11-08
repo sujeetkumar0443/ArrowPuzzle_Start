@@ -37,7 +37,30 @@ namespace ArrowPuzzle
         const float ToastW = 150f, ToastH = 40f, ToastY = BtnBottom + BtnH + 18f, ToastRise = 12f;
         const float ToastIn = 0.2f, ToastHold = 1.2f, ToastOut = 0.3f;
 
+        // Skip pill (design px): right end of the chip band, 44 high
+        const float SkipH = 44f, SkipEdgeD = 3f, SkipFont = 17f, SkipIconD = 14f, SkipBadgeD = 22f, SkipWaitAlpha = 0.55f;
+        const int SkipBonus = 2;
+        const string SkipToast = "Ad not ready, try again";
+        static readonly Color SkipGoldEdge = Theme.Hex("#C98410");
+        static readonly Color SkipPurple = Theme.Hex("#9B5DE5"), SkipPurpleEdge = Theme.Hex("#6E3BB8");
+        // Skip pill animation (unscaled s), driven from TimerLoop: pulse, icon nudge, press, first-attention bounce
+        const float SkipPulsePeriod = 1.4f, SkipPulseScale = 1.06f, SkipNudge = 2f;
+        const float SkipPressScale = 0.94f, SkipPressTime = 0.08f;
+        const float SkipAttentionDelay = 1f, SkipAttentionTime = 0.5f, SkipAttentionScale = 1.18f;
+
         public BoardView Board { get; private set; }
+
+        RectTransform skipRt;
+        Image skipImg, skipBadge;
+        Shadow skipShadow;
+        Text skipLabel, skipBadgeText;
+        CanvasGroup skipGroup;
+        RectTransform skipIconFill; // the play icon's sprite (not under the layout group: free to nudge)
+        Image[] skipIcon;
+        Shimmer skipShimmer;
+        float skipAttentionT0 = -100f, skipPressT0 = -100f;
+        bool skipWaiting; // a Skip / +2 skips video is loading or playing: taps are ignored
+        int skipRequest;  // bumped per request, so a late result can't act on a newer state
 
         Text levelText, countText, hintCount, modeText;
         Image modePill;
@@ -47,8 +70,9 @@ namespace ArrowPuzzle
         readonly Coroutine[] heartFx = new Coroutine[BoardView.MaxLives];
         RectTransform area, card, hintRt, restartRt;
         BoardZoom zoom;
-        int level;
+        int level, typeLevel; // global level (LevelPath) and its number within its type (data, stars, best time)
         float btnBottom = BtnBottom, toastY = ToastY; // move up above the banner (ApplyBannerLayout)
+        bool bannerLayoutPending; // the banner height changed while a popup had it hidden (RestoreBanner)
 
         Image flash;
         Coroutine flashFx, shakeFx, popFx, loseFx, toastFx;
@@ -121,6 +145,7 @@ namespace ArrowPuzzle
             toast.gameObject.SetActive(true);
             toast.transform.SetAsLastSibling();
             var trt = (RectTransform)toast.transform;
+            trt.sizeDelta = new Vector2(Mathf.Max(Theme.D(ToastW), toastText.preferredWidth + Theme.D(32f)), trt.sizeDelta.y); // fits longer texts
             float total = ToastIn + ToastHold + ToastOut;
             float t = 0f;
             while (t < total)
@@ -186,6 +211,7 @@ namespace ArrowPuzzle
                 if (!opened && t >= LosePopupAt)
                 {
                     opened = true;
+                    GameApp.I.Close("PopupPause"); // opened during the collapse: must not stay behind the popup
                     GameApp.I.Open("PopupLose");
                 }
                 yield return null;
@@ -261,20 +287,186 @@ namespace ArrowPuzzle
             }
         }
 
-        /// <summary>One centered row, gap 8: mode pill + "Arrows left N" chip, both 34 high with radius 17.</summary>
+        /// <summary>
+        /// Left-aligned row, gap 8: mode pill (the mode name only) + arrows-left chip (arrow icon + N), both 34 high
+        /// with radius 17; the Skip pill sits at the right end of the same band (BuildSkip). Compact so the three
+        /// always fit: about 170 + Skip 104..116 of the 342 between the side margins.
+        /// </summary>
         void BuildChip()
         {
             var row = Ui.New(Root, "ChipRow");
-            Ui.PlaceD(row, Ui.TC, new Vector2(0f, -ChipTop), new Vector2(0f, ChipH));
-            Ui.Row(row, 8f);
+            Ui.PlaceD(row, Ui.TL, new Vector2(Pad, -ChipTop), new Vector2(0f, ChipH));
+            Ui.Row(row, 8f, TextAnchor.MiddleLeft);
             row.gameObject.AddComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             modePill = Chip(row, 14f, ModeInfo.Get(GameMode.Classic).Color);
             modeText = Ui.Label(modePill.transform, "", 16f, Theme.Card, Weight.Semi);
 
-            var count = Chip(row, 18f, Theme.Card);
-            Ui.Label(count.transform, "Arrows left", 18f, Theme.InkSoft, Weight.Medium);
+            var count = Chip(row, 14f, Theme.Card);
+            var icon = Icons.Make(count.transform, Icon.ArrowRight, Theme.InkSoft, 18f, 2.6f);
+            Ui.Size(icon, 18f, 18f);
             countText = Ui.Label(count.transform, "0", 18f, Theme.Ink, Weight.Bold);
+
+            BuildSkip();
+        }
+
+        // ------------------------------------------------------------------ Skip level (rewarded, daily limit)
+
+        /// <summary>
+        /// Small pill at the right end of the chip band, 44 high: teal, play icon, "Skip" and an ink badge with the skips
+        /// left; gold "+2 skips" (no badge) when none are left (RefreshSkip, also on Save.SkipsChanged).
+        /// </summary>
+        void BuildSkip()
+        {
+            var b = Ui.Btn(Root, "Skip", SkipPurple, Theme.Card, SkipFont, SkipH * 0.5f, SkipPurpleEdge, SkipEdgeD,
+                           OnSkipTap, Icon.Play, SkipIconD);
+            skipRt = (RectTransform)b.transform;
+            // pivot right-middle: every scale keeps the right edge on the margin and grows left / up / down only
+            // (at the 1.18 bounce: y 77..129, between the header (72) and the board (136), far from the chip row)
+            Ui.PlaceD(skipRt, Ui.TR, new Vector2(1f, 0.5f), new Vector2(-Pad, -(ChipTop + ChipH * 0.5f)), new Vector2(0f, SkipH));
+            var squash = b.GetComponent<PressScale>(); // its own 0.95 squash would fight ApplySkipAnim's scale
+            if (squash != null) UnityEngine.Object.Destroy(squash);
+            var iconRt = skipRt.Find("Icon_" + Icon.Play);
+            skipIcon = iconRt != null ? iconRt.GetComponentsInChildren<Image>() : new Image[0];
+            skipIconFill = skipIcon.Length > 0 ? skipIcon[0].rectTransform : null;
+            var hlg = b.GetComponent<HorizontalLayoutGroup>();
+            hlg.spacing = Theme.D(6f);
+            int padL = Mathf.RoundToInt(Theme.D(12f)), padR = Mathf.RoundToInt(Theme.D(10f));
+            hlg.padding = new RectOffset(padL, padR, 0, 0);
+            b.gameObject.AddComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            skipImg = b.GetComponent<Image>();
+            skipShadow = b.GetComponent<Shadow>();
+            skipLabel = b.GetComponentInChildren<Text>();
+
+            skipBadge = Ui.Img(skipRt, "Badge", WinArt.Disc, Theme.Card);
+            skipBadge.raycastTarget = false;
+            Ui.Size(skipBadge, SkipBadgeD, SkipBadgeD);
+            skipBadgeText = Ui.Label(skipBadge.transform, "4", 13f, SkipPurple, Weight.Bold);
+            Ui.Fill(skipBadgeText.rectTransform);
+            // the soft shine (Ui.AddShimmer: white streak, skewed -20 deg, clipped to the pill); paused while stopped
+            skipShimmer = Ui.AddShimmer(skipRt, SkipH * 0.5f);
+            skipGroup = b.gameObject.AddComponent<CanvasGroup>();
+        }
+
+        /// <summary>
+        /// Purple "Skip" (white text and icon) + a white "N" badge while skips are left; gold "+2 skips" with ink text
+        /// at 0. Dimmed while its video loads / plays.
+        /// </summary>
+        void RefreshSkip()
+        {
+            if (skipImg == null) return;
+            int left = Save.SkipsLeft;
+            bool any = left > 0;
+            skipImg.color = any ? SkipPurple : Theme.Gold;
+            if (skipShadow != null) skipShadow.effectColor = any ? SkipPurpleEdge : SkipGoldEdge;
+            Color fg = any ? Theme.Card : Theme.Ink;
+            skipLabel.color = fg;
+            foreach (var img in skipIcon) img.color = fg;
+            skipLabel.text = skipWaiting ? "..." : any ? "Skip" : "+" + SkipBonus + " skips";
+            skipBadge.gameObject.SetActive(any && !skipWaiting);
+            skipBadgeText.text = left.ToString();
+            skipGroup.alpha = skipWaiting ? SkipWaitAlpha : 1f;
+        }
+
+        /// <summary>
+        /// Skips left: one rewarded ad skips this level (Save.UseSkip + Save.SkipLevel: 1 star only if it had none, the
+        /// next level unlocked; no win popup, no bonus spin, no coins, no best time) and the next level starts at once,
+        /// with no interstitial (after level 150: Home). None left: one rewarded ad adds SkipBonus skips for today.
+        /// Ignored while an arrow is moving, the board is finished / locked, or a video is loading.
+        /// </summary>
+        void OnSkipTap()
+        {
+            skipPressT0 = Time.unscaledTime; // press feel on every tap (ApplySkipAnim)
+            if (skipWaiting || Board.AnyMoving || Board.Locked) return;
+            if (Ads.IsRewardedBusy) { ShowToast(SkipToast); return; } // ShowRewarded would ignore it: never wait for it
+            int id = ++skipRequest;
+            int g = level;
+            bool bonus = Save.SkipsLeft <= 0;
+            skipWaiting = true;
+            RefreshSkip();
+            if (bonus) Ads.ShowRewarded(() => OnSkipBonusReward(id), () => OnSkipFailed(id));
+            else Ads.ShowRewarded(() => OnSkipReward(id, g), () => OnSkipFailed(id));
+        }
+
+        void OnSkipReward(int id, int g)
+        {
+            if (id != skipRequest) return;
+            skipWaiting = false;
+            // still this level, on this screen, with nothing finished meanwhile: otherwise nothing is spent
+            if (g != level || !Root.gameObject.activeInHierarchy || Board.Locked || Save.SkipsLeft <= 0) { RefreshSkip(); return; }
+            Save.UseSkip();   // raises SkipsChanged -> RefreshSkip
+            Save.SkipLevel(g);
+            int next = g + 1;
+            if (next > LevelPath.Count || !Save.IsUnlocked(next))
+            {
+                GameApp.I.Show("ScreenHome"); // the last level skipped: Home
+                return;
+            }
+            StartLevel(next); // straight to the next level: no popup, no interstitial
+        }
+
+        void OnSkipBonusReward(int id)
+        {
+            if (id != skipRequest) return;
+            skipWaiting = false;
+            Save.AddSkipBonus(SkipBonus); // raises SkipsChanged -> RefreshSkip
+            RefreshSkip();
+        }
+
+        /// <summary>Not ready, failed to show or closed early: nothing is spent; the short toast.</summary>
+        void OnSkipFailed(int id)
+        {
+            if (id != skipRequest) return;
+            skipWaiting = false;
+            RefreshSkip();
+            ShowToast(SkipToast);
+        }
+
+        /// <summary>
+        /// Every frame from TimerLoop (unscaled): the first-attention bounce 1 s after the level starts (1 -> 1.18 -> 1
+        /// over 0.5 s), then the soft pulse (1 -> 1.06 -> 1 every 1.4 s, ease in-out) with the play icon nudging 2 px
+        /// right and back, the shine sweep, and the press dip (0.94 for 0.08 s, then back). All stop (at rest, no
+        /// shine) while the video loads, an arrow is moving, or the board is finished / locked; the press dip still shows.
+        /// </summary>
+        void ApplySkipAnim()
+        {
+            if (skipRt == null || Board == null) return;
+            float now = Time.unscaledTime;
+            bool stopped = skipWaiting || Board.AnyMoving || Board.Locked;
+            float s = 1f, p = 0f;
+            if (!stopped)
+            {
+                float a = (now - skipAttentionT0) / SkipAttentionTime;
+                float pulseFrom = skipAttentionT0 + SkipAttentionTime;
+                if (a >= 0f && a < 1f) s = 1f + (SkipAttentionScale - 1f) * Mathf.Sin(Mathf.PI * a);
+                else if (now >= pulseFrom)
+                {
+                    float ph = Mathf.Repeat(now - pulseFrom, SkipPulsePeriod) / SkipPulsePeriod;
+                    p = 0.5f - 0.5f * Mathf.Cos(2f * Mathf.PI * ph); // 0 -> 1 -> 0, ease in-out
+                    s = 1f + (SkipPulseScale - 1f) * p;
+                }
+            }
+            float pr = (now - skipPressT0) / SkipPressTime; // 0..1 down, 1..2 back
+            if (pr >= 0f && pr < 2f) s *= Mathf.Lerp(1f, SkipPressScale, pr < 1f ? pr : 2f - pr);
+            skipRt.localScale = new Vector3(s, s, 1f);
+            if (skipIconFill != null) skipIconFill.anchoredPosition = new Vector2(Theme.D(SkipNudge * p), 0f);
+            if (skipShimmer != null && skipShimmer.enabled == stopped) skipShimmer.enabled = !stopped;
+        }
+
+        /// <summary>Back at rest (leaving the screen).</summary>
+        void ResetSkipAnim()
+        {
+            if (skipRt == null) return;
+            skipRt.localScale = Vector3.one;
+            if (skipIconFill != null) skipIconFill.anchoredPosition = Vector2.zero;
+            skipAttentionT0 = skipPressT0 = -100f;
+        }
+
+        void ShowToast(string text)
+        {
+            if (!Root.gameObject.activeInHierarchy) return;
+            if (toastFx != null) GameApp.I.StopCoroutine(toastFx);
+            toastFx = GameApp.I.StartCoroutine(Toast(text));
         }
 
         /// <summary>Pill of height ChipH, width from its content (side padding padD, gap 8).</summary>
@@ -335,9 +527,26 @@ namespace ArrowPuzzle
         /// </summary>
         void OnBannerHeight()
         {
+            if (!Ads.IsBannerWanted)
+            {
+                // a popup hid the banner (win / lose): nothing moves behind it; applied in RestoreBanner
+                bannerLayoutPending = true;
+                return;
+            }
+            bannerLayoutPending = false;
             if (!ApplyBannerLayout() || Board.Size.x <= 0f) return;
             FitBoard();
             if (zoom.Zoom > 1.001f) zoom.ResetZoom(true); // back to 1x = fit, within the new pan limits
+        }
+
+        /// <summary>
+        /// The win / lose popup closed (any route): the banner comes back, and a banner height that arrived while it
+        /// was hidden is applied now. Going Home is fine too: Home wants the banner as well.
+        /// </summary>
+        public void RestoreBanner(string who)
+        {
+            Ads.Banner(true, who);
+            if (bannerLayoutPending) OnBannerHeight();
         }
 
         /// <summary>Card = board (scaled down if the area got smaller than the size it was loaded for) + padding.</summary>
@@ -354,15 +563,20 @@ namespace ArrowPuzzle
 
         public override void OnShow()
         {
-            mode = GameApp.I.CurrentMode;
             Ads.BannerHeightChanged -= OnBannerHeight; // never twice
             Ads.BannerHeightChanged += OnBannerHeight;
+            Save.SkipsChanged -= RefreshSkip;
+            Save.SkipsChanged += RefreshSkip; // the lose popup's skips / bonus update this pill too
             StartLevel(GameApp.I.CurrentLevel);
         }
 
         public override void OnHide()
         {
             Ads.BannerHeightChanged -= OnBannerHeight;
+            Save.SkipsChanged -= RefreshSkip;
+            skipRequest++;       // a video still running can't skip a level on a screen that is gone
+            skipWaiting = false;
+            ResetSkipAnim();     // TimerLoop (which drives it) stops below
             Ads.Banner(false, "ScreenGame"); // ignored when Home asks for it in the same frame
             StopFx();
             if (timerFx != null) GameApp.I.StopCoroutine(timerFx);
@@ -377,20 +591,23 @@ namespace ArrowPuzzle
         }
 
         /// <summary>
-        /// Loads level n of the current mode (also for popups: Next / Retry while this screen is already showing).
-        /// n is kept within 1..LevelsPerMode.
+        /// Loads global level n (also for popups: Next / Retry while this screen is already showing). n is kept within
+        /// 1..LevelPath.Count; its type and type level come from LevelPath.
         /// </summary>
         public void StartLevel(int n)
         {
             Time.timeScale = 1f; // safety: a level never starts frozen
-            GameApp.I.UnlockPending = false; // a new level started: an unplayed unlock sequence is out of date
-            var data = Levels.For(mode, Mathf.Clamp(n, 1, ModeInfo.LevelsPerMode));
+            int g = Mathf.Clamp(n, 1, LevelPath.Count);
+            var type = LevelPath.TypeOf(g);
+            var data = Levels.For(type, LevelPath.TypeLevelOf(g));
             if (data == null)
             {
-                Debug.LogError("[ArrowPuzzle] No level " + n + " for mode " + mode);
+                Debug.LogError("[ArrowPuzzle] No level " + g + " (" + type + " " + LevelPath.TypeLevelOf(g) + ")");
                 return;
             }
-            level = data.number;
+            mode = type;
+            level = g;
+            typeLevel = data.number;
             GameApp.I.CurrentMode = mode;
             GameApp.I.CurrentLevel = level;
             levelText.text = "Level " + level;
@@ -398,18 +615,27 @@ namespace ArrowPuzzle
 
             var info = ModeInfo.Get(mode);
             modePill.color = info.Color;
-            modeText.text = string.IsNullOrEmpty(data.shape) || mode == GameMode.Classic
-                ? info.Name
-                : info.Name + " · " + char.ToUpper(data.shape[0]) + data.shape.Substring(1);
+            modeText.text = info.Name; // the mode name only (compact chip row: room for the Skip pill)
+            skipWaiting = false;
+            RefreshSkip();
+            skipAttentionT0 = Time.unscaledTime + SkipAttentionDelay; // one stronger bounce 1 s into every level
             StopFx();
             ResetTimer();
+            SoundFx.ResetCombo();
+            MusicPlayer.PlayLevel(level);
             Board.ResetCollapse(); // Load also resets; explicit so Restart / StartLevel never keep a collapsed board
             shownLives = -1;      // the Load below sets hearts and counter without animating
             shownRemaining = -1;
             zoom.ResetZoom(false); // every level start / restart is at 1x
 
             Ads.Banner(true, "ScreenGame"); // every level start (first, Restart, Next): this screen wants it
+            bannerLayoutPending = false;
             ApplyBannerLayout(); // buttons and board area above the banner's current height
+            AnalyticsService.LevelStart(level, mode.ToString(), LevelPath.Difficulty(level));
+            CrashReporter.SetKey("level", level.ToString());
+            CrashReporter.SetKey("type", mode.ToString());
+            MrecSlot.Preload(MrecKind.Bonus); // the MRECs of the popups that can open from here (no-op when loading /
+            MrecSlot.Preload(MrecKind.Lose);  // loaded at the same place); Level complete's loads while the wheel spins
 
             Canvas.ForceUpdateCanvases(); // make sure the area rect is up to date
             Vector2 free = area.rect.size - Vector2.one * Theme.D(CardPad * 2f);
@@ -428,32 +654,36 @@ namespace ArrowPuzzle
         void OnWon()
         {
             timing = false; // normally already frozen at the last tap
-            float prevBest = Save.GetBestTime(mode, level);
+            float prevBest = Save.GetBestTime(mode, typeLevel);
             bool newBest = prevBest <= 0f || solveTime < prevBest;
-            if (newBest) Save.SetBestTime(mode, level, solveTime);
+            if (newBest) Save.SetBestTime(mode, typeLevel, solveTime);
             GameApp.I.ResultTime = solveTime;
             GameApp.I.ResultPrevBest = prevBest;
             GameApp.I.ResultNewBest = newBest;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.Log("[ArrowPuzzle] Solve time: " + FormatTime(solveTime) + " (" + solveTime.ToString("F2") + " s, "
                       + (prevBest > 0f ? "best was " + FormatTime(prevBest) + " (" + prevBest.ToString("F2") + " s)" : "no best yet")
                       + (newBest ? " / new best" : "") + ")");
+#endif
 
             GameApp.I.ResultLives = Board.Lives;
             int stars = Mathf.Clamp(Board.Lives, 1, 3);
-            Save.SetStars(mode, level, stars);
-            if (level == Save.GetUnlocked(mode))
-            {
-                Save.SetUnlocked(mode, Mathf.Min(level + 1, ModeInfo.LevelsPerMode + 1));
-                // this clear opened a new level: let the level map play the unlock sequence
-                if (level < ModeInfo.LevelsPerMode)
-                {
-                    GameApp.I.UnlockPending = true;
-                    GameApp.I.ClearedLevel = level;
-                    GameApp.I.ClearedStars = stars;
-                    GameApp.I.ClearedMode = mode;
-                }
-            }
-            GameApp.I.Open("PopupWin"); // its Next / Home show the interstitial
+            int prevStars = Save.Stars(mode, typeLevel);                                // for the map (read only)
+            bool unlocks = level == Save.UnlockedGlobal && level < LevelPath.Count;     // what LevelWon will do
+            Save.SetStars(mode, typeLevel, stars);
+            Save.LevelWon(level);
+            // hand-off to the map's unlock animation (played only after PopupWin's NEXT)
+            GameApp.I.UnlockPending = true;
+            GameApp.I.ClearedLevel = level;
+            GameApp.I.ClearedStars = stars;
+            GameApp.I.ClearedMode = mode;
+            GameApp.I.ClearedPrevStars = prevStars;
+            GameApp.I.ClearedUnlocked = unlocks;
+            GameApp.I.Close("PopupPause"); // opened during the last arrow's exit: must not stay behind the popup
+            // Bonus Spin first (it hands over to Level complete, whose Next / Home show the interstitial)
+            GameApp.I.BonusMult = 0;
+            GameApp.I.SkipInterstitialOnce = false;
+            if (!GameApp.I.Open("PopupBonusSpin")) GameApp.I.Open("PopupWin");
         }
 
         // ------------------------------------------------------------------ solve timer (unscaled time)
@@ -495,6 +725,7 @@ namespace ArrowPuzzle
             while (true)
             {
                 if (TimerRuns()) solveTime = Mathf.Min(solveTime + Mathf.Min(Time.unscaledDeltaTime, TimerMaxStep), TimerCapSeconds);
+                ApplySkipAnim(); // the Skip pill's look (no timer of its own)
                 yield return null;
             }
         }
@@ -517,7 +748,11 @@ namespace ArrowPuzzle
                 GameApp.I.Open("PopupHints");
                 return;
             }
-            if (Board.ShowHint()) Save.Hints = Save.Hints - 1;
+            if (Board.ShowHint())
+            {
+                Save.Hints = Save.Hints - 1;
+                AnalyticsService.HintUsed(level);
+            }
             RefreshHints();
         }
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arrow Puzzle: Google Analytics for Firebase starts OFF (collection and every consent-mode signal denied) until the
+  UMP consent result is known; AnalyticsService then calls SetAnalyticsCollectionEnabled / SetConsent at runtime.
+  A library manifest: it is merged into the app with the AdMob and Firebase ones and only adds these meta-data entries
+  (it removes nothing). tools:replace makes these values win if another library ever declares the same names.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools"
+          package="com.arrowpuzzle.consent">
+  <application>
+    <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" tools:replace="android:value" />
+    <meta-data android:name="google_analytics_default_allow_analytics_storage" android:value="false" tools:replace="android:value" />
+    <meta-data android:name="google_analytics_default_allow_ad_storage" android:value="false" tools:replace="android:value" />
+    <meta-data android:name="google_analytics_default_allow_ad_user_data" android:value="false" tools:replace="android:value" />
+    <meta-data android:name="google_analytics_default_allow_ad_personalization_signals" android:value="false" tools:replace="android:value" />
+  </application>
+</manifest>

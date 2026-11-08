@@ -7,8 +7,8 @@ using UnityEngine.UI;
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// Settings screen: back button + title, GAME (Sound and Vibration switches), MORE (Share / Rate us / Privacy
-    /// Policy), version line. The content scrolls between the header and the banner, which this screen keeps on.
+    /// Settings screen: back button + title, GAME (Sound and Vibration switches), MORE (Share / Rate us / Music credits
+    /// / Privacy options, the last only where UMP requires it), version line. The content scrolls between the header and the banner, which this screen keeps on.
     /// Back (button or phone key) returns to the screen that opened it. Opened from Home only: ScreenGame.OnShow
     /// starts its level again, so a trip here from the game would restart the level.
     /// </summary>
@@ -26,18 +26,11 @@ namespace ArrowPuzzle
         const float SwitchW = 52f, SwitchH = 30f, SwitchPad = 18f;
         const float ListW = 390f - Side * 2f;
 
-        // toast (as on Home): above the bottom of the view
-        const float ToastW = 330f, ToastH = 44f, ToastGap = 12f, ToastRise = 12f;
-        const float ToastIn = 0.2f, ToastHold = 1.4f, ToastOut = 0.3f;
-
-        SwitchView sound, haptics;
+        SwitchView sound, musicSwitch, haptics;
+        GameObject privacyOptions, privacyDivider; // shown only where UMP requires privacy options (EEA / UK)
         RectTransform view;
         LayoutElement contentMin;
         ScrollRect scroll;
-        CanvasGroup toast;
-        Text toastText;
-        Coroutine toastFx;
-        float toastY;
 
         protected override void Build()
         {
@@ -53,17 +46,37 @@ namespace ArrowPuzzle
 
             // GAME: switch rows
             var game = Section(content, "Game");
-            sound = SwitchRow(game, Icon.Sound, Theme.Teal, "Sound", () => Save.Sound, v => Save.Sound = v);
+            sound = SwitchRow(game, Icon.Sound, Theme.Teal, "Sound", () => Save.Sound, v =>
+            {
+                Save.Sound = v;
+                AnalyticsService.SettingsChanged("sound", v ? "on" : "off");
+            });
             Divider(game);
-            haptics = SwitchRow(game, Icon.Vibrate, Theme.Accent, "Vibration", () => Save.Haptics, v => Save.Haptics = v);
+            musicSwitch = SwitchRow(game, Icon.Music, Theme.LinkBlue, "Music", () => Save.Music, v =>
+            {
+                MusicPlayer.SetEnabled(v);
+                AnalyticsService.SettingsChanged("music", v ? "on" : "off");
+            });
+            Divider(game);
+            haptics = SwitchRow(game, Icon.Vibrate, Theme.Accent, "Vibration", () => Save.Haptics, v =>
+            {
+                Save.Haptics = v;
+                AnalyticsService.SettingsChanged("vibration", v ? "on" : "off");
+            });
 
             // MORE: link rows
             var more = Section(content, "More");
             LinkRow(more, Icon.Share, Theme.LinkBlue, "Share this game", AppLinks.Share);
             Divider(more);
             LinkRow(more, Icon.Star, Theme.ModeGold, "Rate us", AppLinks.Rate);
-            Divider(more);
-            LinkRow(more, Icon.Shield, Theme.LinkGreen, "Privacy Policy", OnPrivacy);
+            if (PopupMusicCredits.CreditsText.Length > 0)
+            {
+                Divider(more);
+                LinkRow(more, Icon.Music, Theme.ModeGold, "Music credits", () => GameApp.I.Open("PopupMusicCredits"));
+            }
+            // last row of the card, so no other row moves when it appears (the spacer below absorbs it)
+            privacyDivider = Divider(more);
+            privacyOptions = LinkRow(more, Icon.Shield, Theme.Teal, "Privacy options", OnPrivacyOptions);
 
             // version, at the bottom of the view when everything fits (the spacer takes the free height)
             var spacer = Ui.New(content, "Spacer");
@@ -71,14 +84,15 @@ namespace ArrowPuzzle
             var version = Ui.Label(content, "Arrow Puzzle · Version " + Application.version, 17f, Theme.FootNote, Weight.Medium);
             Ui.Size(version, 0f, 24f);
 
-            BuildToast();
             BannerDebug.Create(Root, "ScreenSettings"); // only when Ads.ShowBannerDebug
         }
 
         public override void OnShow()
         {
             sound.Refresh();
+            musicSwitch.Refresh();
             haptics.Refresh();
+            RefreshPrivacyOptions();
             Ads.BannerHeightChanged -= Layout; // never twice
             Ads.BannerHeightChanged += Layout;
             Ads.Banner(true, "ScreenSettings"); // wins over the previous screen's hide in the same frame
@@ -89,9 +103,6 @@ namespace ArrowPuzzle
         {
             Ads.BannerHeightChanged -= Layout;
             Ads.Banner(false, "ScreenSettings"); // ignored when the next screen (Home) asks for it in the same frame
-            if (toastFx != null) GameApp.I.StopCoroutine(toastFx);
-            toastFx = null;
-            toast.gameObject.SetActive(false);
         }
 
         public override bool OnBack()
@@ -100,7 +111,7 @@ namespace ArrowPuzzle
             return true;
         }
 
-        /// <summary>To the screen that opened Settings; Home when there is none.</summary>
+        /// <summary>To the screen that opened Settings; the map when there is none.</summary>
         static void GoBack()
         {
             string prev = GameApp.I.PreviousScreen;
@@ -163,7 +174,6 @@ namespace ArrowPuzzle
             contentMin.minHeight = Mathf.Max(0f, h - top - bottom);
             scroll.StopMovement();
             scroll.content.anchoredPosition = Vector2.zero;
-            toastY = bottom / Theme.K + ToastGap;
         }
 
         // ------------------------------------------------------------------ lists
@@ -209,7 +219,7 @@ namespace ArrowPuzzle
         }
 
         /// <summary>Row 76: icon square, Semi label, chevron on the right. Press = highlight + click.</summary>
-        static void LinkRow(RectTransform list, Icon icon, Color iconBg, string text, Action onClick)
+        static GameObject LinkRow(RectTransform list, Icon icon, Color iconBg, string text, Action onClick)
         {
             var row = Ui.Img(list, text + "Row", null, Color.clear);
             Ui.Size(row, 0f, RowH);
@@ -226,6 +236,7 @@ namespace ArrowPuzzle
 
             var chevron = Icons.Make(row.transform, Icon.Chevron, Theme.Chevron, ChevronD);
             Ui.PlaceD(chevron, new Vector2(1f, 0.5f), new Vector2(-RowPad + 4f, 0f), new Vector2(ChevronD, ChevronD)); // stroke sits left in its box
+            return row.gameObject;
         }
 
         /// <summary>Icon square + label of a row; rightD = room kept free on the right for the switch / chevron.</summary>
@@ -242,64 +253,31 @@ namespace ArrowPuzzle
                       new Vector2(ListW - labelX - RowPad - rightD, RowH));
         }
 
-        static void Divider(RectTransform list)
+        static GameObject Divider(RectTransform list)
         {
             var line = Ui.Img(list, "Divider", null, Theme.ListDivider);
             line.raycastTarget = false;
             Ui.Size(line, 0f, DividerH);
+            return line.gameObject;
         }
 
-        void OnPrivacy()
+        /// <summary>The Privacy options row (and its divider) only where UMP requires it.</summary>
+        void RefreshPrivacyOptions()
         {
-            if (AppLinks.OpenPrivacyPolicy()) return;
-            if (toastFx != null) GameApp.I.StopCoroutine(toastFx);
-            toastFx = GameApp.I.StartCoroutine(Toast("Privacy policy link is not set yet"));
+            bool on = ConsentService.PrivacyOptionsRequired;
+            privacyOptions.SetActive(on);
+            privacyDivider.SetActive(on);
         }
 
-        // ------------------------------------------------------------------ toast
-
-        /// <summary>Small ink pill above the bottom of the view, hidden until Toast() runs. Never takes taps.</summary>
-        void BuildToast()
+        /// <summary>UMP's privacy options form; the new choice reaches Analytics and ads through ConsentService.Changed.</summary>
+        void OnPrivacyOptions()
         {
-            var pill = Ui.Img(Root, "Toast", Theme.Rounded, Theme.Ink, ToastH * 0.5f);
-            pill.raycastTarget = false;
-            Ui.PlaceD(pill.rectTransform, Ui.BC, Vector2.zero, new Vector2(ToastW, ToastH));
-            toastText = Ui.Label(pill.transform, "", 17f, Theme.Card, Weight.Bold);
-            Ui.Fill(toastText.rectTransform);
-            toast = pill.gameObject.AddComponent<CanvasGroup>();
-            toast.blocksRaycasts = false;
-            toast.interactable = false;
-            pill.gameObject.SetActive(false);
-        }
-
-        /// <summary>Fades and rises in, holds, fades out (unscaled time).</summary>
-        IEnumerator Toast(string text)
-        {
-            toastText.text = text;
-            toast.gameObject.SetActive(true);
-            toast.transform.SetAsLastSibling();
-            var trt = (RectTransform)toast.transform;
-            float total = ToastIn + ToastHold + ToastOut;
-            float t = 0f;
-            while (t < total)
+            ConsentService.ShowPrivacyOptions(() =>
             {
-                t += Time.unscaledDeltaTime;
-                toast.alpha = t < ToastIn ? EaseOutCubic(t / ToastIn)
-                            : t < ToastIn + ToastHold ? 1f
-                            : 1f - Mathf.Clamp01((t - ToastIn - ToastHold) / ToastOut);
-                float rise = EaseOutCubic(Mathf.Clamp01(t / ToastIn));
-                trt.anchoredPosition = new Vector2(0f, Theme.D(toastY - ToastRise * (1f - rise)));
-                yield return null;
-            }
-            toast.gameObject.SetActive(false);
-            toastFx = null;
+                if (Root.gameObject.activeInHierarchy) RefreshPrivacyOptions(); // still on Settings
+            });
         }
 
-        static float EaseOutCubic(float x)
-        {
-            float u = 1f - x;
-            return 1f - u * u * u;
-        }
     }
 
     /// <summary>List row press feedback: its Image takes the pressed color while held, clear otherwise.</summary>

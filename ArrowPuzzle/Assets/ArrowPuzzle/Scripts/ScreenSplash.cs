@@ -25,7 +25,7 @@ namespace ArrowPuzzle
         const float RestIn0 = 2.4f, RestIn1 = 2.9f;
         const float BarEnd = 4.0f;
         const float Out0 = 4.0f, Out1 = 4.4f;
-        const float AdWait = 3f;              // extra wait at Out0 for the app open ad to finish loading
+        const float AdWait = 4f;              // max extra hold at Out0 for the app open ad to finish loading
 
         static bool appOpenTried;             // at most one app open ad from the splash per launch
 
@@ -241,17 +241,24 @@ namespace ArrowPuzzle
                     appOpenTried = true;
                     t = Out0;
                     float w = 0f;
-                    while (!Ads.IsAppOpenReady && Ads.IsAppOpenLoading && w < AdWait)
+                    while (!Ads.IsAppOpenReady && Ads.IsAppOpenLoading && !AppStartup.AdsBlocked && w < AdWait)
                     {
                         w += Time.unscaledDeltaTime;
                         yield return null;
                     }
                     if (Ads.IsAppOpenReady)
                     {
+                        Ads.Log("app open at launch: loaded, showing (held the splash " + w.ToString("0.00") + " s)");
                         anim = null;
                         Ads.ShowAppOpen(() => GameApp.I.Show("ScreenHome"));
                         yield break;
                     }
+                    // a load that finishes later is kept and only used under the return rules (Ads.ReturnSkipReason)
+                    Ads.Log("app open skipped at launch: " + (
+                        AppStartup.AdsBlocked ? "consent does not allow ad requests" :
+                        Ads.IsAppOpenLoading ? "not loaded within " + AdWait + " s (still loading, kept for a later return)" :
+                        Ads.AppOpenLastError != null ? "load failed (" + Ads.AppOpenLastError + ")" :
+                        "no ad loaded"));
                 }
 
                 if (!click && t >= RingStart) { click = true; Sfx.Play(Sfx.Id.Click); }

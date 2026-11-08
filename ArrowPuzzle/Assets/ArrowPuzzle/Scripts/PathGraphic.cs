@@ -13,6 +13,7 @@ namespace ArrowPuzzle
     {
         public float width = 24f;      // line width, or dot diameter when dotted
         public float dotSpacing;       // > 0: dots every dotSpacing along the path instead of a line
+        public bool strip;             // true: one joined strip with round end caps (for dense, smoothed paths)
         const int DiscSegments = 16;
 
         readonly List<Vector2> pts = new List<Vector2>();
@@ -52,8 +53,38 @@ namespace ArrowPuzzle
                 return;
             }
 
+            if (strip)
+            {
+                Strip(vh, r);
+                return;
+            }
+
             for (int i = 1; i < pts.Count; i++) Quad(vh, pts[i - 1], pts[i], r);
             for (int i = 0; i < pts.Count; i++) Disc(vh, pts[i], r); // round caps and joins
+        }
+
+        /// <summary>One joined strip (two vertices per point, normal from the neighbours) with round end caps.</summary>
+        void Strip(VertexHelper vh, float r)
+        {
+            int n = pts.Count;
+            if (n < 2) { Disc(vh, pts[0], r); return; }
+            int start = vh.currentVertCount;
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 d = pts[Mathf.Min(i + 1, n - 1)] - pts[Mathf.Max(i - 1, 0)];
+                if (d.sqrMagnitude < 1e-8f) d = Vector2.up;
+                Vector2 nrm = new Vector2(-d.y, d.x).normalized * r;
+                vh.AddVert(pts[i] - nrm, color, Vector4.zero);
+                vh.AddVert(pts[i] + nrm, color, Vector4.zero);
+            }
+            for (int i = 0; i < n - 1; i++)
+            {
+                int a = start + i * 2;
+                vh.AddTriangle(a, a + 1, a + 3);
+                vh.AddTriangle(a + 3, a + 2, a);
+            }
+            Disc(vh, pts[0], r);
+            Disc(vh, pts[n - 1], r);
         }
 
         void Quad(VertexHelper vh, Vector2 a, Vector2 b, float r)

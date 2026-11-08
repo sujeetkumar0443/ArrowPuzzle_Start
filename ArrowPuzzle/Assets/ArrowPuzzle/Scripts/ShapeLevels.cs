@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+#if UNITY_EDITOR
 using System.Text;
+#endif
 using UnityEngine;
 
 namespace ArrowPuzzle

@@ -6,11 +6,15 @@ using UnityEngine.UI;
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// "Banner Stamp" level complete: an arrow sweeps across, a LEVEL COMPLETE! banner stamps down (shake + gold
-    /// ring) and moves up, the card slides in, earned stars drop and bounce, confetti, then the info line and
-    /// NEXT LEVEL / Home fade in. Below the info line the solve time counts up from 00:00 and, on a new best, a NEW BEST!
-    /// badge stamps in, then the previous best fades in. Tapping before the buttons appear skips to the end. Unscaled time, t = s since OnShow.
-    /// Everything except one-shot events (sounds, landing rings) is a pure function of t (Apply), so skipping is exact.
+    /// Full-screen Level complete, opened by PopupBonusSpin after the bonus wheel (cream over the whole screen,
+    /// content in the safe area). Opening: an arrow sweeps across, the LEVEL COMPLETE! ribbon stamps down (shake +
+    /// gold ring) and moves up, the content slides in, the earned smiley stars pop in one by one (confetti), the coin
+    /// card pops in, then Home / NEXT LEVEL fade in. The coin card shows what this win paid: "+25 coins earned"
+    /// (GameApp.BonusMult 0 = No thanks) or "+(25 x N) coins earned with bonus spin" with a gold xN badge. The medium
+    /// 300x250 MREC (MrecSlot, MrecKind.Win) goes under the row. Tapping before the buttons appear skips to the end. Unscaled time,
+    /// t = s since OnShow; the one-shot timeline is a pure function of t (Apply), the idle life (wiggle, blink,
+    /// sparkles, "z") runs every frame after it (ApplyLife). NEXT / Home: interstitial (today's rules), skipped once
+    /// right after the bonus wheel's rewarded ad (GameApp.SkipInterstitialOnce).
     /// </summary>
     public class PopupWin : AppScreen
     {
@@ -20,76 +24,110 @@ namespace ArrowPuzzle
         const float SweepT0 = 0.15f, SweepT1 = 0.75f, SweepFrom = -260f, SweepTo = 520f;   // arrow tail x from the screen left
         const float SweepBody = 300f, SweepThick = 26f, SweepHead = 56f, GhostLag = 0.04f;
         const int Ghosts = 3;
-        const float BannerYFrac = 0.43f;                                                    // banner / sweep y, of the screen height from the top
-        const float BannerW = 500f, BannerH = 96f, BannerTilt = 6f;                         // Unity z (CSS -6deg)
+        const float BannerYFrac = 0.43f;                                                    // banner / sweep y while stamping, of the safe height
+        const float BannerW = 330f, BannerH = 48f, BannerTilt = 6f, BannerFont = 28f, BannerEdgeD = 6f;
+        const float BannerBig = 440f / 330f;                                                // stamp size: about 440 wide
         const float StampT0 = 0.7f, StampT1 = 0.95f, StampScale = 1.6f, StampBack = 2.4f;
         const float ShakeT0 = 0.95f, ShakeT1 = 1.3f, ShakeAmp = 7f, ShakeFreq = 70f;
         const float RingT0 = 0.95f, RingT1 = 1.45f, RingR0 = 60f, RingR1 = 360f, RingW0 = 8f, RingW1 = 1f;
-        const float MoveT0 = 1.5f, MoveT1 = 2.0f, BannerTop = 120f, BannerSmall = 0.72f;
-        const float CardT0 = 1.7f, CardT1 = 2.3f, CardTop = 190f, CardW = 326f, CardH = 520f;
-        const float StarsY = 85f, SideX = 86f, SideR = 34f, MidR = 45f, MidRaise = 14f, SideTilt = 10f;
-        const float DropT0 = 2.05f, DropEvery = 0.3f, DropTime = 0.5f;
+        const float MoveT0 = 1.5f, MoveT1 = 2.0f;
+        const float CardT0 = 1.7f, CardT1 = 2.3f;                                           // the content body slides up from below the screen
+        // stars: 66 / 90 / 66, sides tilted +-10, centre 8 higher
+        const float MidD = 90f, SideD = 66f, SideX = 96f, SideTilt = 10f;
+        const float PopT0 = 2.05f, PopEvery = 0.5f, PopTime = 0.42f, PopPeak = 1.28f, PopPeakAt = 0.6f;
+        const float WiggleDeg = 4f, WiggleScale = 0.03f, WiggleRamp = 0.4f;
+        const float BlinkEvery = 3.2f, BlinkTime = 0.14f;
+        const float ZLoop = 2.4f, ZRise = 12f;
         const float StarRingR0 = 24f, StarRingR1 = 90f, StarRingW0 = 5f, StarRingW1 = 1f, StarRingTime = 0.5f;
         const float LandShake = 3f, LandShakeTime = 0.2f;
-        const float InfoY = 185f, InfoT0 = 2.9f, InfoT1 = 3.2f;
-        const float NextY = 354f, HomeY = 440f, ButtonsT0 = 3.0f, ButtonsT1 = 3.4f;
+        // coin card: white 326 x 92, radius 26, 7 px #E3DACB edge; coin 48, "+N" 40 bold, note 16; gold xN badge
+        const float CoinCardW = 326f, CoinCardH = 92f, CoinCardR = 26f, CoinCardEdgeD = 7f;
+        const float CoinD = 48f, CoinGap = 12f, AmountFont = 40f, NoteFont = 16f, AmountY = 11f, NoteY = -18f;
+        const float BadgeW = 62f, BadgeH = 34f, BadgeEdgeD = 3f, BadgeFont = 20f, BadgeTilt = -8f, BadgeX = -26f;
+        const float CoinCardT0 = 2.6f, CoinCardT1 = 2.95f;
+        // the row: round-ish Home (64) + 12 + NEXT LEVEL
+        const float ButtonW = 342f, NextH = 60f, RowGap = 12f, HomeW = 64f, HomeEdgeD = 3f, NextEdgeD = 5f;
+        const float NextW = ButtonW - HomeW - RowGap;
+        const float ButtonsT0 = 3.0f, ButtonsT1 = 3.4f;
         const float SkipBefore = 3.0f;
         const int ConfettiCount = 50;
         const float ConfettiT0 = 2.0f, ConfettiLife = 2.0f, ConfettiFade = 0.4f, ConfettiSpread = 1.3f;
         const float ConfettiSpeed = 500f, ConfettiGravity = 700f;
         const int ConfettiSeed = 7;
-        // solve time block, y below TimeTop (the block's origin, below the card top)
-        const float TimeTop = 205f;
-        const float TimeLabelY = 14f, TimeLabelSpacing = 1.5f;                              // "YOUR TIME", letter spacing (design px)
-        const float TimeValueY = 38f, TimeValueH = 64f;                                     // big time centre: baseline at about +60
-        const float TimeT0 = 2.9f, TimeT1 = 3.2f, CountT0 = 3.0f, CountT1 = 4.0f;           // fade in, count up 00:00 -> time
-        const float PulseTime = 0.33f, PulseScale = 1.1f;                                   // after the count
-        const float BadgeY = 96f, BadgeW = 116f, BadgeH = 34f, BadgeR = 10f, BadgeEdgeD = 3f;
-        const float BadgeTilt = 3.5f;                                                       // Unity z (CSS -3.5deg)
-        const float BadgeT0 = 4.0f, BadgeT1 = 4.35f, BadgeScale = 1.8f, BadgeBack = 2.6f;
-        const float PrevY = 134f, PrevT0 = 4.3f, PrevT1 = 4.6f;
-        static readonly Color BadgeEdge = Theme.Hex("#B97C00");
-        static readonly Color BadgeInk = Theme.Hex("#3A2A00");
 
-        const float End = PrevT1 + 0.05f;                                                   // last moving thing done (confetti ends at 4.0)
+        // ---- vertical layout, design px from the safe-area top: normal / compact (MrecSlot.Plan, t = 0 .. 1).
+        // The stars shrink (x 0.8) and the gaps tighten; text, card and button sizes never change, the ad never does.
+        //   normal : banner 16..70 (incl. edge), stars 105..193, coin card 232..331, row 346..411, MREC top 444
+        //   compact: banner 8..62,                stars 82..154, coin card 172..271, row 286..351, MREC top 384
+        const float BannerCY = 40f, CBannerCY = 32f;
+        const float MidY = 152f, CMidY = 120f, SideY = 160f, CSideY = 127f, CStarScale = 0.8f; // star centres
+        const float CoinCardTop = 232f, CCoinCardTop = 172f;
+        const float NextTop = 346f, CNextTop = 286f;
 
-        RectTransform content, card, banner;
+        const float End = ConfettiT0 + ConfettiLife + 0.05f;                                // last one-shot thing done
+
+        // ---- colours (UI_SPEC palette via Theme; the rest only exist on this screen)
+        static readonly Color RoundEdge = Theme.Hex("#D9D1C1");   // Home button's raised edge (as the ad frame)
+        static readonly Color Cheek = new Color(1f, 122f / 255f, 102f / 255f, 0.75f); // #FF7A66 at 75 %
+        static readonly Color SparkleColor = Theme.Hex("#FFC82E");
+        static readonly Color CoinEdge = Theme.Hex("#D98E00");
+        static readonly Color BadgeEdge = Theme.Hex("#C98410");
+
+        RectTransform safe, content, card, banner;
         CanvasGroup bannerGroup, buttonsGroup;
         bool waitingForAd; // a Next / Home tap is waiting for the interstitial
-        Text info, timeLabel, timeValue, prevBest;
-        RectTransform badge;
-        CanvasGroup badgeGroup;
-        ArrowGraphic badgeRing;
-        float resultTime;
-        bool newBest, badgeFired;
-        int shownSeconds = -1;
         readonly ArrowGraphic[] sweep = new ArrowGraphic[Ghosts + 1]; // [0] = the arrow, [1..3] = ghosts
         ArrowGraphic bigRing;
-        readonly RectTransform[] drops = new RectTransform[3];
         readonly ArrowGraphic[] starRings = new ArrowGraphic[3];
-        readonly float[] slotY = new float[3];
-        readonly bool[] landed = new bool[3];
-        readonly float[] landT = new float[3];
+        readonly StarView[] happy = new StarView[3], sleepy = new StarView[3];
+        readonly bool[] popped = new bool[3], landed = new bool[3];
+        readonly float[] landT = new float[3], popScale = new float[3], popEnd = new float[3];
         readonly Image[] confetti = new Image[ConfettiCount];
         readonly Vector2[] cVel = new Vector2[ConfettiCount];
         readonly float[] cSpin = new float[ConfettiCount];
         readonly List<Vector2> pts = new List<Vector2>(65);
         GameObject skipCatcher;
+        MrecSlot mrec; // 300x250 MREC (or its shimmer) under the button row, once the body is in place
 
-        float screenH, t0;
+        // coin card
+        RectTransform coinCard, coinRt, amountRt, noteRt;
+        CanvasGroup coinCardGroup;
+        Text amountText, noteText;
+        GameObject badge;
+        Text badgeText;
+
+        RectTransform homeRt, nextRt;
+
+        float midY = MidY, sideY = SideY, bannerCY = BannerCY, starScale = 1f; // current layout (ApplyLayout)
+        float screenH, t0; // screenH = safe-area height (canvas units)
         int earned;
-        bool confettiOn, skipped;
+        bool confettiOn, skipped, settled;
         Vector2 confettiOrigin;
         Coroutine run;
 
+        sealed class StarView
+        {
+            public RectTransform root, eyeL, eyeR, z;
+            public Text zText;
+            public readonly List<RectTransform> sparkles = new List<RectTransform>();
+            public readonly List<Image> sparkleG = new List<Image>();
+            public float tilt;
+            public Vector2 zBase;
+        }
+
         protected override void Build()
         {
-            content = Ui.New(Root, "Content");
+            // full screen: cream over the whole screen (blocks taps to the game), content inside the safe area
+            var bg = Ui.Img(Root, "Bg", null, Theme.Bg);
+            Ui.Fill(bg.rectTransform);
+            safe = Ui.New(Root, "Safe");
+            Ui.FitSafeArea(safe);
+            content = Ui.New(safe, "Content");
             Ui.Fill(content);
 
             BuildCard();
 
-            // confetti pool above the card
+            // confetti pool above the body
             var layer = Ui.New(content, "Confetti");
             Ui.Fill(layer);
             for (int i = 0; i < ConfettiCount; i++)
@@ -118,18 +156,14 @@ namespace ArrowPuzzle
                 sweep[g] = a;
             }
 
-            // banner
-            var bImg = Ui.Img(content, "Banner", Theme.Rounded, Theme.Accent, 10f);
+            // coral LEVEL COMPLETE! ribbon: stamps at the centre, then rests at the top
+            var bImg = Ui.Img(content, "Banner", Theme.Rounded, Theme.Accent, 12f);
             bImg.raycastTarget = false;
             banner = bImg.rectTransform;
             Ui.PlaceD(banner, Ui.TC, Ui.C, Vector2.zero, new Vector2(BannerW, BannerH));
-            var edge = bImg.gameObject.AddComponent<Shadow>();
-            edge.effectColor = Theme.AccentShadow;
-            edge.effectDistance = new Vector2(0f, -Theme.D(8f));
-            edge.useGraphicAlpha = false;
+            AddEdge(bImg, Theme.AccentShadow, BannerEdgeD);
             bannerGroup = bImg.gameObject.AddComponent<CanvasGroup>();
-            var bText = Ui.Label(banner, "LEVEL COMPLETE!", 44f, Theme.Card, Weight.Bold);
-            Ui.Fill(bText.rectTransform);
+            Ui.Fill(Ui.Label(banner, "LEVEL COMPLETE!", BannerFont, Theme.Card, Weight.Bold).rectTransform);
 
             bigRing = Ring(content, Ui.TC, Vector2.zero);
 
@@ -144,83 +178,247 @@ namespace ArrowPuzzle
 
         void BuildCard()
         {
-            var cImg = Ui.Img(content, "Card", Theme.Rounded, Theme.Card, 32f);
-            card = cImg.rectTransform;
-            Ui.PlaceD(card, Ui.TC, new Vector2(0f, -CardTop), new Vector2(CardW, CardH));
-            var edge = cImg.gameObject.AddComponent<Shadow>();
-            edge.effectColor = Theme.PopupShadow;
-            edge.effectDistance = new Vector2(0f, -Theme.D(10f));
-            edge.useGraphicAlpha = false;
+            // transparent body over the whole safe area (top = safe-area top); slides up from below the screen
+            card = Ui.New(content, "Body");
+            card.anchorMin = Vector2.zero;
+            card.anchorMax = Vector2.one;
+            card.pivot = Ui.TC;
+            card.offsetMin = card.offsetMax = Vector2.zero;
 
-            // star slots (left, middle, right), empty colour; earned stars drop on top of them
-            float[] xs = { -SideX, 0f, SideX };
-            float[] rs = { SideR, MidR, SideR };
+            // stars: a sleepy grey and a happy gold one per slot (OnShow shows one of them); left, middle, right
             float[] tilt = { SideTilt, 0f, -SideTilt }; // Unity z (CSS -10 / +10 deg)
             for (int i = 0; i < 3; i++)
             {
-                slotY[i] = -StarsY + (i == 1 ? MidRaise : 0f);
-                float size = rs[i] * 2f;
-                var slot = Icons.Make(card, Icon.Star, Theme.Locked, size);
-                Ui.PlaceD(slot, Ui.TC, Ui.C, new Vector2(xs[i], slotY[i]), new Vector2(size, size));
-                slot.localEulerAngles = new Vector3(0f, 0f, tilt[i]);
-
-                drops[i] = Icons.Make(card, Icon.Star, Theme.Gold, size);
-                Ui.PlaceD(drops[i], Ui.TC, Ui.C, new Vector2(xs[i], slotY[i]), new Vector2(size, size));
-                drops[i].localEulerAngles = new Vector3(0f, 0f, tilt[i]);
-
-                starRings[i] = Ring(card, Ui.TC, new Vector2(xs[i], slotY[i]));
+                float d = i == 1 ? MidD : SideD;
+                sleepy[i] = BuildSleepyStar(card, i, d, tilt[i]);
+                happy[i] = BuildHappyStar(card, i, d, tilt[i]);
+                starRings[i] = Ring(card, Ui.TC, Vector2.zero);
             }
 
-            info = Ui.Label(card, "", 20f, Theme.InkSoft, Weight.Medium);
-            Ui.PlaceD(info.rectTransform, Ui.TC, Ui.C, new Vector2(0f, -InfoY), new Vector2(CardW - 48f, 26f));
-
-            BuildTime();
+            BuildCoinCard(card);
 
             var buttons = Ui.New(card, "Buttons");
             Ui.Fill(buttons);
             buttonsGroup = buttons.gameObject.AddComponent<CanvasGroup>();
 
-            var next = Ui.Btn(buttons, "NEXT LEVEL", Theme.Accent, Theme.Card, 24f, 24f, Theme.AccentShadow, 5f,
-                              () => AfterAd(NextLevel));
-            Ui.PlaceD((RectTransform)next.transform, Ui.TC, new Vector2(0f, -NextY), new Vector2(CardW - 48f, 72f));
+            // Home on the left of the row: white, 3 px raised edge, home icon (same press squash, same interstitial rule)
+            var home = Ui.Btn(buttons, "", Theme.Card, Theme.Ink, 20f, NextH * 0.5f, RoundEdge, HomeEdgeD,
+                              () => AfterAd(GoHome), Icon.Home, 26f, Weight.Semi);
+            home.name = "Btn_Home";
+            homeRt = (RectTransform)home.transform;
+            Ui.PlaceD(homeRt, Ui.TC, new Vector2(-(ButtonW - HomeW) * 0.5f, -NextTop), new Vector2(HomeW, NextH));
+
+            var next = Ui.Btn(buttons, "NEXT LEVEL", Theme.Accent, Theme.Card, 24f, 20f, Theme.AccentShadow, NextEdgeD, OnNextTap);
+            nextRt = (RectTransform)next.transform;
+            Ui.PlaceD(nextRt, Ui.TC, new Vector2((ButtonW - NextW) * 0.5f, -NextTop), new Vector2(NextW, NextH));
             var arrow = Icons.Make(next.transform, Icon.ArrowRight, Theme.Card, 24f, 3f);
             Ui.Size(arrow, 24f, 24f);
-            // first sweep when the button has faded in (the shimmer's clock starts when the popup opens)
-            Ui.AddShimmer((RectTransform)next.transform, 24f, ButtonsT1);
+            Ui.AddShimmer(nextRt, 20f, ButtonsT1); // first sweep once the button is in
 
-            var home = Ui.Btn(buttons, "Home", Theme.Bg, Theme.Ink, 20f, 20f, Theme.CardShadow, 0f,
-                              () => AfterAd(GoHome), Icon.Home, 24f, Weight.Semi);
-            Ui.PlaceD((RectTransform)home.transform, Ui.TC, new Vector2(0f, -HomeY), new Vector2(CardW - 48f, 60f));
+            // MREC frame under the row, in the safe rect (not the body: the ad is a native view and never slides or
+            // shakes); placed per show (OnShow), shown once the body is in place
+            mrec = MrecSlot.Create(safe, MrecKind.Win, "PopupWin", PlanMrec, t => ApplyLayout(t, false));
         }
 
-        /// <summary>YOUR TIME label, the big mm:ss, the NEW BEST! badge (+ its ring) and the previous-best line.</summary>
-        void BuildTime()
+        /// <summary>White coin card: coin + "+N" + a note, centred as one block (SetCoins); a gold xN badge on its top-right corner.</summary>
+        void BuildCoinCard(RectTransform parent)
         {
-            timeLabel = Ui.Label(card, "YOUR TIME", 13f, Theme.InkSoft, Weight.Bold);
-            Ui.PlaceD(timeLabel.rectTransform, Ui.TC, Ui.C, new Vector2(0f, -(TimeTop + TimeLabelY)), new Vector2(CardW - 48f, 18f));
-            timeLabel.gameObject.AddComponent<LetterSpacing>().spacing = Theme.D(TimeLabelSpacing);
+            var img = Ui.Img(parent, "CoinCard", Theme.Rounded, Theme.Card, CoinCardR);
+            img.raycastTarget = false;
+            coinCard = img.rectTransform;
+            Ui.PlaceD(coinCard, Ui.TC, new Vector2(0f, -CoinCardTop), new Vector2(CoinCardW, CoinCardH));
+            AddEdge(img, Theme.CardShadow, CoinCardEdgeD);
+            coinCardGroup = img.gameObject.AddComponent<CanvasGroup>();
 
-            timeValue = Ui.Label(card, "00:00", 56f, Theme.Ink, Weight.Bold);
-            Ui.PlaceD(timeValue.rectTransform, Ui.TC, Ui.C, new Vector2(0f, -(TimeTop + TimeValueY)), new Vector2(CardW - 48f, TimeValueH));
+            coinRt = Coin(coinCard, CoinD);
+            Ui.PlaceD(coinRt, Ui.C, Ui.C, Vector2.zero, new Vector2(CoinD, CoinD));
 
-            var bImg = Ui.Img(card, "NewBest", Theme.Rounded, Theme.Gold, BadgeR);
-            bImg.raycastTarget = false;
-            badge = bImg.rectTransform;
-            Ui.PlaceD(badge, Ui.TC, Ui.C, new Vector2(0f, -(TimeTop + BadgeY)), new Vector2(BadgeW, BadgeH));
-            badge.localEulerAngles = new Vector3(0f, 0f, BadgeTilt);
-            var edge = bImg.gameObject.AddComponent<Shadow>();
-            edge.effectColor = BadgeEdge;
-            edge.effectDistance = new Vector2(0f, -Theme.D(BadgeEdgeD));
+            amountText = Ui.Label(coinCard, "+25", AmountFont, Theme.Ink, Weight.Bold, TextAnchor.MiddleLeft);
+            amountRt = amountText.rectTransform;
+            Ui.PlaceD(amountRt, Ui.C, new Vector2(0f, 0.5f), new Vector2(0f, AmountY), new Vector2(240f, 50f));
+            noteText = Ui.Label(coinCard, "coins earned", NoteFont, Theme.InkSoft, Weight.Medium, TextAnchor.MiddleLeft);
+            noteRt = noteText.rectTransform;
+            Ui.PlaceD(noteRt, Ui.C, new Vector2(0f, 0.5f), new Vector2(0f, NoteY), new Vector2(260f, 22f));
+
+            var b = Ui.Img(coinCard, "Badge", Theme.Rounded, Theme.Gold, BadgeH * 0.5f);
+            b.raycastTarget = false;
+            Ui.PlaceD(b.rectTransform, Ui.TR, Ui.C, new Vector2(BadgeX, 0f), new Vector2(BadgeW, BadgeH));
+            b.rectTransform.localEulerAngles = new Vector3(0f, 0f, BadgeTilt);
+            AddEdge(b, BadgeEdge, BadgeEdgeD);
+            badgeText = Ui.Label(b.rectTransform, "x10", BadgeFont, Theme.Ink, Weight.Bold);
+            Ui.Fill(badgeText.rectTransform);
+            badge = b.gameObject;
+        }
+
+        /// <summary>
+        /// What this win paid: BonusMult 0 = "+25 coins earned"; N = "+(25 x N) coins earned with bonus spin" and the xN
+        /// badge. Coin + text are centred as one block on the card (measured from the texts' preferred widths).
+        /// </summary>
+        void SetCoins(int mult)
+        {
+            bool bonus = mult > 0;
+            amountText.text = "+" + Save.WinCoins * (bonus ? mult : 1);
+            noteText.text = bonus ? "coins earned with bonus spin" : "coins earned";
+            badge.SetActive(bonus);
+            badgeText.text = "x" + mult;
+
+            float textW = Mathf.Max(amountText.preferredWidth, noteText.preferredWidth) / Theme.K;
+            float left = -(CoinD + CoinGap + textW) * 0.5f;
+            coinRt.anchoredPosition = new Vector2(Theme.D(left + CoinD * 0.5f), 0f);
+            float textX = Theme.D(left + CoinD + CoinGap);
+            amountRt.anchoredPosition = new Vector2(textX, Theme.D(AmountY));
+            noteRt.anchoredPosition = new Vector2(textX, Theme.D(NoteY));
+        }
+
+        // ------------------------------------------------------------------ stars
+
+        /// <summary>
+        /// Gold rounded star (WinArt.StarGold: back layer, body, lighter inner star, highlight arc) with the face:
+        /// eyes 8.5 % of the size with a white shine (they blink), pink cheeks, an open smile 17 % wide with a tongue,
+        /// and three twinkling 4-point sparkles around it.
+        /// </summary>
+        StarView BuildHappyStar(RectTransform parent, int i, float s, float tilt)
+        {
+            var v = StarRoot(parent, "Happy" + i, s, tilt, WinArt.StarGold);
+
+            float eye = 0.085f * s;
+            v.eyeL = Eye(v.root, "EyeL", new Vector2(-0.12f * s, 0.03f * s), eye);
+            v.eyeR = Eye(v.root, "EyeR", new Vector2(0.12f * s, 0.03f * s), eye);
+            Dot(v.root, "CheekL", Cheek, new Vector2(-0.245f * s, -0.075f * s), new Vector2(0.13f * s, 0.08f * s));
+            Dot(v.root, "CheekR", Cheek, new Vector2(0.245f * s, -0.075f * s), new Vector2(0.13f * s, 0.08f * s));
+            var smile = Ui.Img(v.root, "Smile", WinArt.Smile, Color.white);       // colours baked (dark + pink tongue)
+            smile.raycastTarget = false;
+            Ui.PlaceD(smile.rectTransform, Ui.C, Ui.C, new Vector2(0f, -0.085f * s), new Vector2(0.17f * s, 0.085f * s));
+
+            // sparkles around the star: (x, y, size) relative to the star size
+            float[,] sp = { { -0.62f, 0.46f, 0.22f }, { 0.63f, 0.5f, 0.17f }, { 0.7f, -0.24f, 0.18f } };
+            for (int k = 0; k < sp.GetLength(0); k++)
+            {
+                var img = Ui.Img(v.root, "Sparkle" + k, WinArt.Sparkle, SparkleColor);
+                img.raycastTarget = false;
+                Ui.PlaceD(img.rectTransform, Ui.C, Ui.C, new Vector2(sp[k, 0] * s, sp[k, 1] * s), new Vector2(sp[k, 2] * s, sp[k, 2] * s));
+                v.sparkles.Add(img.rectTransform);
+                v.sparkleG.Add(img);
+            }
+            v.root.gameObject.SetActive(false);
+            return v;
+        }
+
+        /// <summary>Grey rounded star (WinArt.StarGrey: back layer + body), closed eyes, a flat mouth and a floating "z".</summary>
+        StarView BuildSleepyStar(RectTransform parent, int i, float s, float tilt)
+        {
+            var v = StarRoot(parent, "Sleepy" + i, s, tilt, WinArt.StarGrey);
+
+            for (int k = -1; k <= 1; k += 2)
+            {
+                var eye = Ui.Img(v.root, k < 0 ? "EyeL" : "EyeR", WinArt.SleepyEye, Theme.InkSoft);
+                eye.raycastTarget = false;
+                Ui.PlaceD(eye.rectTransform, Ui.C, Ui.C, new Vector2(k * 0.12f * s, 0.01f * s), new Vector2(0.13f * s, 0.065f * s));
+            }
+            float th = Mathf.Max(2.5f, 0.035f * s);
+            var mouth = Ui.Img(v.root, "Mouth", Theme.Rounded, Theme.InkSoft, th * 0.5f);
+            mouth.raycastTarget = false;
+            Ui.PlaceD(mouth.rectTransform, Ui.C, Ui.C, new Vector2(0f, -0.12f * s), new Vector2(0.14f * s, th));
+
+            v.zText = Ui.Label(v.root, "z", Mathf.Max(13f, 0.3f * s), Theme.InkSoft, Weight.Bold);
+            v.z = v.zText.rectTransform;
+            v.zBase = new Vector2(0.46f * s, 0.42f * s);
+            Ui.PlaceD(v.z, Ui.C, Ui.C, v.zBase, new Vector2(0.4f * s, 0.4f * s));
+            v.root.gameObject.SetActive(false);
+            return v;
+        }
+
+        /// <summary>Star root at the slot (ApplyLayout sets x / y; origin = the star's centre) with the generated body.</summary>
+        static StarView StarRoot(RectTransform parent, string name, float s, float tilt, Sprite body)
+        {
+            var v = new StarView { tilt = tilt };
+            v.root = Ui.New(parent, name);
+            Ui.PlaceD(v.root, Ui.TC, Ui.C, Vector2.zero, new Vector2(s, s));
+            v.root.localEulerAngles = new Vector3(0f, 0f, tilt);
+            var img = Ui.Img(v.root, "Body", body, Color.white);
+            img.raycastTarget = false;
+            Ui.PlaceD(img.rectTransform, Ui.C, Ui.C, new Vector2(0f, WinArt.StarBoxCY * s), new Vector2(WinArt.StarBox * s, WinArt.StarBox * s));
+            return v;
+        }
+
+        /// <summary>Dark eye with a small white shine (a child, so a blink squashes both).</summary>
+        static RectTransform Eye(RectTransform parent, string name, Vector2 posD, float d)
+        {
+            var eye = Dot(parent, name, Theme.Ink, posD, new Vector2(d, d * 1.15f));
+            Dot(eye, "Shine", Color.white, new Vector2(0.2f * d, 0.25f * d), new Vector2(0.38f * d, 0.38f * d));
+            return eye;
+        }
+
+        static RectTransform Dot(RectTransform parent, string name, Color c, Vector2 posD, Vector2 sizeD)
+        {
+            var img = Ui.Img(parent, name, WinArt.Disc, c);
+            img.raycastTarget = false;
+            Ui.PlaceD(img.rectTransform, Ui.C, Ui.C, posD, sizeD);
+            return img.rectTransform;
+        }
+
+        /// <summary>Gold coin: darker rim, gold face slightly up, a small white shine.</summary>
+        static RectTransform Coin(Transform parent, float d)
+        {
+            var rim = Ui.Img(parent, "Coin", WinArt.Disc, CoinEdge);
+            rim.raycastTarget = false;
+            var rt = rim.rectTransform;
+            rt.sizeDelta = new Vector2(Theme.D(d), Theme.D(d));
+            Dot(rt, "Face", Theme.Gold, new Vector2(0f, 0.04f * d), new Vector2(0.76f * d, 0.76f * d));
+            Dot(rt, "Shine", new Color(1f, 1f, 1f, 0.55f), new Vector2(-0.16f * d, 0.18f * d), new Vector2(0.2f * d, 0.2f * d));
+            return rt;
+        }
+
+        // ------------------------------------------------------------------ layout
+
+        /// <summary>
+        /// Lays the content above the ad out at compact amount t (0 = normal, 1 = compact: stars x 0.8, tighter gaps).
+        /// Positions and the star scale only; text, card and button sizes never change.
+        /// </summary>
+        void ApplyLayout(float t, bool log = true)
+        {
+            bannerCY = Mathf.Lerp(BannerCY, CBannerCY, t);
+            midY = Mathf.Lerp(MidY, CMidY, t);
+            sideY = Mathf.Lerp(SideY, CSideY, t);
+            starScale = Mathf.Lerp(1f, CStarScale, t);
+            for (int i = 0; i < 3; i++)
+            {
+                var pos = new Vector2(Theme.D((i - 1) * SideX * starScale), -Theme.D(i == 1 ? midY : sideY));
+                happy[i].root.anchoredPosition = pos;
+                sleepy[i].root.anchoredPosition = pos;
+                sleepy[i].root.localScale = new Vector3(starScale, starScale, 1f);
+                starRings[i].rectTransform.anchoredPosition = pos;
+            }
+            SetY(coinCard, Mathf.Lerp(CoinCardTop, CCoinCardTop, t));
+            float next = Mathf.Lerp(NextTop, CNextTop, t);
+            SetY(homeRt, next);
+            SetY(nextRt, next);
+            if (log && t > 0f)
+                Debug.Log("[ArrowPuzzle] PopupWin compact layout t " + t.ToString("0.##") + ": stars x" + starScale.ToString("0.00") +
+                          ", row bottom " + (next + NextH + NextEdgeD).ToString("0"));
+        }
+
+        /// <summary>
+        /// Where the MREC goes on this phone: its top at MrecFit.WinAdTopD (444), moving up with the button row as the
+        /// layout compacts (row 346 -> 286), at the smallest compact amount that keeps the whole frame on screen.
+        /// </summary>
+        MrecFit.Result PlanMrec()
+        {
+            return MrecFit.UnderRow(Ads.MrecAvailableDesign, Ads.ScreenWidthDp, MrecFit.WinAdTopD, MrecFit.WinAdTopD - (NextTop - CNextTop));
+        }
+
+        /// <summary>Moves a rect to y design px below the body top (its anchor is the body's top centre).</summary>
+        static void SetY(RectTransform rt, float yD)
+        {
+            rt.anchoredPosition = new Vector2(rt.anchoredPosition.x, -Theme.D(yD));
+        }
+
+        static void AddEdge(Graphic g, Color c, float d)
+        {
+            var edge = g.gameObject.AddComponent<Shadow>();
+            edge.effectColor = c;
+            edge.effectDistance = new Vector2(0f, -Theme.D(d));
             edge.useGraphicAlpha = false;
-            badgeGroup = bImg.gameObject.AddComponent<CanvasGroup>();
-            badgeGroup.blocksRaycasts = false;
-            var bText = Ui.Label(badge, "NEW BEST!", 17f, BadgeInk, Weight.Bold);
-            Ui.Fill(bText.rectTransform);
-
-            badgeRing = Ring(card, Ui.TC, new Vector2(0f, -(TimeTop + BadgeY)));
-
-            prevBest = Ui.Label(card, "", 14f, Theme.InkSoft, Weight.Medium);
-            Ui.PlaceD(prevBest.rectTransform, Ui.TC, Ui.C, new Vector2(0f, -(TimeTop + PrevY)), new Vector2(CardW - 48f, 20f));
         }
 
         static ArrowGraphic Ring(RectTransform parent, Vector2 anchor, Vector2 posD)
@@ -239,40 +437,52 @@ namespace ArrowPuzzle
 
         public override void OnShow()
         {
+            MusicPlayer.Duck(MusicPlayer.WinDuck);
+            Ads.Banner(false, "PopupWin"); // back in OnHide (every route)
+            Ui.FitSafeArea(safe);
             Canvas.ForceUpdateCanvases();
-            screenH = Root.rect.height;
-            earned = Mathf.Clamp(GameApp.I.ResultLives, 1, 3);
+            screenH = safe.rect.height;
+            // medium first: normal layout, or the compact step at which the medium ad fits under the button row
+            ApplyLayout(mrec.Plan());
+            earned = Mathf.Clamp(GameApp.I.ResultLives, 1, 3); // the stars ScreenGame.OnWon saved
+            AnalyticsService.LevelComplete(GameApp.I.CurrentLevel, GameApp.I.CurrentMode.ToString(), earned,
+                                           GameApp.I.ResultTime, GameApp.I.ResultNewBest);
+            SetCoins(GameApp.I.BonusMult); // set by PopupBonusSpin: 0 = No thanks
 
-            int left = GameApp.I.ResultLives;
-            info.text = "Level " + GameApp.I.CurrentLevel + " · " + left + (left == 1 ? " life left" : " lives left");
+            for (int i = 0; i < 3; i++)
+            {
+                popped[i] = landed[i] = false;
+                landT[i] = -100f;
+                popScale[i] = 0f;
+                popEnd[i] = PopT0 + i * PopEvery + PopTime;
+                happy[i].root.gameObject.SetActive(false);
+                sleepy[i].root.gameObject.SetActive(i >= earned); // earned stars fill left, middle, right
+            }
 
-            resultTime = GameApp.I.ResultTime;
-            newBest = GameApp.I.ResultNewBest;
-            float prev = GameApp.I.ResultPrevBest;
-            badge.gameObject.SetActive(newBest);
-            prevBest.gameObject.SetActive(prev > 0f);
-            prevBest.text = (newBest ? "Previous best  " : "Best  ") + ScreenGame.FormatTime(prev);
-            badgeFired = false;
-            shownSeconds = -1;
-
-            for (int i = 0; i < 3; i++) { landed[i] = false; landT[i] = -100f; }
             confettiOn = false;
             skipped = false;
+            settled = false;
             waitingForAd = false;
             SeedConfetti();
 
             t0 = Time.unscaledTime;
             Apply(0f);
+            ApplyLife(0f);
             if (run != null) GameApp.I.StopCoroutine(run);
             run = GameApp.I.StartCoroutine(Run());
         }
 
         public override void OnHide()
         {
+            MusicPlayer.Duck(1f);
             if (run != null) GameApp.I.StopCoroutine(run);
             run = null;
             content.anchoredPosition = Vector2.zero;
             foreach (var c in confetti) c.gameObject.SetActive(false);
+            mrec.End();
+            var game = GameApp.I.Get<ScreenGame>();
+            if (game != null) game.RestoreBanner("PopupWin");
+            else Ads.Banner(true, "PopupWin");
         }
 
         /// <summary>Closing with back would leave the finished (locked) board, so back goes Home (after the ad, like the button).</summary>
@@ -282,15 +492,30 @@ namespace ArrowPuzzle
             return true;
         }
 
+        void OnNextTap()
+        {
+            if (waitingForAd) return;
+            AnalyticsService.WinNextTap(GameApp.I.CurrentLevel, false); // no NEXT delay any more
+            AfterAd(NextLevel);
+        }
+
         /// <summary>
-        /// Interstitial, then the action. The buttons stay locked from the tap until the ad is done (the popup's dim
-        /// backdrop already blocks the screen behind). No ad after the very first level a player ever completes.
+        /// Interstitial, then the action. The buttons stay locked from the tap until the ad is done. No interstitial
+        /// after the very first level a player ever completes, nor once right after the bonus wheel's rewarded ad.
         /// </summary>
         void AfterAd(System.Action action)
         {
             if (waitingForAd) return;
             waitingForAd = true;
             LockButtons();
+            mrec.End(); // Next / Home / Back: the MREC goes before the interstitial
+            if (GameApp.I.SkipInterstitialOnce)
+            {
+                GameApp.I.SkipInterstitialOnce = false;
+                Debug.Log("[Ads] interstitial skipped: the bonus wheel's rewarded ad was just watched");
+                Done(action);
+                return;
+            }
             if (Save.CompletedLevels() <= 1)
             {
                 Debug.Log("[Ads] interstitial skipped: first level ever completed");
@@ -316,26 +541,22 @@ namespace ArrowPuzzle
             GameApp.I.Show("ScreenHome");
         }
 
-        void NextLevel()
+        /// <summary>
+        /// NEXT (after the interstitial, AfterAd): starts the next global level straight away. After level 150 (or if
+        /// the next level is somehow still locked) it goes back to Home.
+        /// </summary>
+        static void NextLevel()
         {
             int next = GameApp.I.CurrentLevel + 1;
             GameApp.I.Close("PopupWin");
-            if (GameApp.I.UnlockPending)
+            var game = GameApp.I.Get<ScreenGame>();
+            if (next > LevelPath.Count || !Save.IsUnlocked(next) || game == null)
             {
-                // a new level was unlocked: show it on the level map (it plays the unlock sequence)
-                GameApp.I.CurrentMode = GameApp.I.ClearedMode;
-                GameApp.I.Show("ScreenLevels");
-                return;
-            }
-            if (next > ModeInfo.LevelsPerMode)
-            {
-                // last level of this mode done: back to the mode cards
                 GameApp.I.Show("ScreenHome");
                 return;
             }
-            // ScreenGame is already visible, so Show would not reload it; start the level directly (same mode)
-            var game = GameApp.I.Get<ScreenGame>();
-            if (game != null) game.StartLevel(next);
+            GameApp.I.CurrentLevel = next;
+            game.StartLevel(next); // ScreenGame is already visible, so Show would not reload it
         }
 
         /// <summary>Jump to the final state: stars in place, no landing rings or confetti, buttons visible.</summary>
@@ -343,8 +564,12 @@ namespace ArrowPuzzle
         {
             if (skipped || Time.unscaledTime - t0 >= SkipBefore) return;
             skipped = true;
-            for (int i = 0; i < 3; i++) { landed[i] = true; landT[i] = -100f; }
-            badgeFired = true; // no stamp sound / ring: the time block jumps to its end state (ApplyTime)
+            for (int i = 0; i < 3; i++)
+            {
+                popped[i] = landed[i] = true;
+                landT[i] = -100f;
+                popEnd[i] = ButtonsT1; // the wiggle eases in from now
+            }
             confettiOn = false;
             foreach (var c in confetti) c.gameObject.SetActive(false);
             t0 = Time.unscaledTime - ButtonsT1;
@@ -353,14 +578,15 @@ namespace ArrowPuzzle
 
         IEnumerator Run()
         {
-            while (true)
+            while (true) // until OnHide: the stars keep their idle life
             {
                 float t = Time.unscaledTime - t0;
-                Apply(t);
-                if (t > End) break;
+                if (t <= End) Apply(t);
+                else if (!settled) { Apply(End); settled = true; }
+                ApplyLife(t);
+                ApplyButtons(t);
                 yield return null;
             }
-            run = null;
         }
 
         // ------------------------------------------------------------------ the timeline
@@ -371,12 +597,13 @@ namespace ArrowPuzzle
 
             ApplySweep(t);
             ApplyBanner(t);
-            ApplyCard(t);
+            card.anchoredPosition = new Vector2(0f, -BodyOffsetAt(t));
             ApplyStars(t);
             ApplyConfetti(t);
-            ApplyTime(t);
+            ApplyCoinCard(t);
+            if (t >= CardT1) mrec.Begin(); // body in place; once per show (skip jumps past CardT1 too)
 
-            // shakes: banner impact + a tiny one per landed star
+            // shakes: banner impact + a tiny one per popped star
             float dx = 0f;
             if (t >= ShakeT0 && t < ShakeT1)
                 dx += Mathf.Sin((t - ShakeT0) * ShakeFreq) * ShakeAmp * (1f - (t - ShakeT0) / (ShakeT1 - ShakeT0));
@@ -386,11 +613,15 @@ namespace ArrowPuzzle
                 if (s >= 0f && s < LandShakeTime) dx += Mathf.Sin(s * ShakeFreq) * LandShake * (1f - s / LandShakeTime);
             }
             content.anchoredPosition = new Vector2(Theme.D(dx), 0f);
+            ApplyButtons(t);
+        }
 
-            info.color = WithAlpha(Theme.InkSoft, Mathf.Clamp01((t - InfoT0) / (InfoT1 - InfoT0)));
+        /// <summary>The buttons fade in with the opening and are tappable once visible, except while the interstitial runs.</summary>
+        void ApplyButtons(float t)
+        {
             float b = Mathf.Clamp01((t - ButtonsT0) / (ButtonsT1 - ButtonsT0));
             buttonsGroup.alpha = b;
-            buttonsGroup.interactable = buttonsGroup.blocksRaycasts = b >= 0.5f && !waitingForAd; // tappable once visible
+            buttonsGroup.interactable = buttonsGroup.blocksRaycasts = b >= 0.5f && !waitingForAd;
         }
 
         void ApplySweep(float t)
@@ -410,98 +641,103 @@ namespace ArrowPuzzle
             }
         }
 
+        /// <summary>Stamps at the screen centre (big, tilted), then moves up to its place at the top.</summary>
         void ApplyBanner(float t)
         {
             float stamp = Mathf.Clamp01((t - StampT0) / (StampT1 - StampT0));
             float move = EaseInOutCubic(Mathf.Clamp01((t - MoveT0) / (MoveT1 - MoveT0)));
 
             bannerGroup.alpha = stamp;
-            float scale = Mathf.LerpUnclamped(StampScale, 1f, EaseOutBack(stamp, StampBack)) * Mathf.Lerp(1f, BannerSmall, move);
+            float scale = Mathf.LerpUnclamped(StampScale, 1f, EaseOutBack(stamp, StampBack)) * Mathf.Lerp(BannerBig, 1f, move);
             banner.localScale = Vector3.one * scale;
             banner.localEulerAngles = new Vector3(0f, 0f, Mathf.Lerp(BannerTilt, 0f, move));
-            banner.anchoredPosition = new Vector2(0f, -Mathf.Lerp(screenH * BannerYFrac, Theme.D(BannerTop), move));
+            banner.anchoredPosition = new Vector2(0f, -Mathf.Lerp(screenH * BannerYFrac, Theme.D(bannerCY), move));
 
             // gold ring from the banner centre (still at its stamp position)
             DrawRing(bigRing, (t - RingT0) / (RingT1 - RingT0), RingR0, RingR1, RingW0, RingW1);
             bigRing.rectTransform.anchoredPosition = new Vector2(0f, -screenH * BannerYFrac);
         }
 
-        void ApplyCard(float t)
+        /// <summary>The coin card pops in (fade + a small scale overshoot) while the last stars land.</summary>
+        void ApplyCoinCard(float t)
         {
-            card.anchoredPosition = new Vector2(0f, -CardTopAt(t));
+            float k = Mathf.Clamp01((t - CoinCardT0) / (CoinCardT1 - CoinCardT0));
+            coinCardGroup.alpha = k;
+            coinCard.localScale = Vector3.one * Mathf.LerpUnclamped(0.85f, 1f, EaseOutBack(k, 1.8f));
         }
 
-        /// <summary>Card top in canvas units from the screen top: slides up from below the screen.</summary>
-        float CardTopAt(float t)
+        /// <summary>How far the body is below its rest place (canvas units): slides up from below the screen.</summary>
+        float BodyOffsetAt(float t)
         {
             float k = EaseOutCubic(Mathf.Clamp01((t - CardT0) / (CardT1 - CardT0)));
-            return Mathf.Lerp(screenH + Theme.D(20f), Theme.D(CardTop), k);
+            return Mathf.Lerp(screenH + Theme.D(20f), 0f, k);
         }
 
+        /// <summary>Earned stars pop in one by one: scale 0 -> 1.28 -> 1 (sound at the start, gold ring + shake at the peak).</summary>
         void ApplyStars(float t)
         {
-            float dropFrom = Theme.D(CardTop + StarsY + 120f); // start above the top of the screen
             for (int i = 0; i < 3; i++)
             {
-                int order = i; // earned stars fill left, middle, right
-                bool isEarned = order < earned;
-                float s = DropT0 + order * DropEvery;
-                float x = (t - s) / DropTime;
-                bool on = isEarned && (landed[i] || x >= 0f);
-                if (drops[i].gameObject.activeSelf != on) drops[i].gameObject.SetActive(on);
-                if (on)
-                {
-                    float k = landed[i] && skipped ? 1f : EaseOutBounce(Mathf.Clamp01(x));
-                    var p = drops[i].anchoredPosition;
-                    drops[i].anchoredPosition = new Vector2(p.x, Mathf.Lerp(Theme.D(slotY[i]) + dropFrom, Theme.D(slotY[i]), k));
-                }
+                if (i >= earned) { DrawRing(starRings[i], -1f, 0f, 0f, 0f, 0f); continue; }
+                float s = PopT0 + i * PopEvery;
+                float x = skipped ? 1f : (t - s) / PopTime;
+                bool on = popped[i] || x >= 0f;
+                if (happy[i].root.gameObject.activeSelf != on) happy[i].root.gameObject.SetActive(on);
+                if (!on) continue;
 
-                if (isEarned && !landed[i] && x >= 1f)
+                x = Mathf.Clamp01(x);
+                popScale[i] = x < PopPeakAt
+                    ? PopPeak * EaseOutCubic(x / PopPeakAt)
+                    : Mathf.Lerp(PopPeak, 1f, EaseInOutCubic((x - PopPeakAt) / (1f - PopPeakAt)));
+                if (!popped[i])
                 {
-                    landed[i] = true;
-                    landT[i] = s + DropTime;
+                    popped[i] = true;
                     Sfx.Play(Sfx.Id.Star);
                 }
-
+                if (!landed[i] && x >= PopPeakAt)
+                {
+                    landed[i] = true;
+                    landT[i] = s + PopPeakAt * PopTime;
+                }
                 DrawRing(starRings[i], (t - landT[i]) / StarRingTime, StarRingR0, StarRingR1, StarRingW0, StarRingW1);
             }
         }
 
-        /// <summary>Time fades in, counts up (ease-out cubic), turns Accent + pulses; badge stamps; previous best fades in.</summary>
-        void ApplyTime(float t)
+        /// <summary>Every frame: popped stars wiggle, blink and twinkle; sleepy stars float their "z".</summary>
+        void ApplyLife(float t)
         {
-            if (skipped) t = End; // skip shows the final time, badge and previous-best line
-
-            float fade = Mathf.Clamp01((t - TimeT0) / (TimeT1 - TimeT0));
-            timeLabel.color = WithAlpha(Theme.InkSoft, fade);
-
-            float count = Mathf.Clamp01((t - CountT0) / (CountT1 - CountT0));
-            int secs = Mathf.FloorToInt(count >= 1f ? resultTime : resultTime * EaseOutCubic(count));
-            if (secs != shownSeconds)
+            for (int i = 0; i < 3; i++)
             {
-                shownSeconds = secs;
-                timeValue.text = ScreenGame.FormatTime(secs);
-            }
-            timeValue.color = WithAlpha(count >= 1f ? Theme.Accent : Theme.Ink, fade);
-            float pulse = (t - CountT1) / PulseTime;
-            float ps = pulse > 0f && pulse < 1f ? 1f + (PulseScale - 1f) * Mathf.Sin(pulse * Mathf.PI) : 1f;
-            timeValue.rectTransform.localScale = Vector3.one * ps;
-
-            if (newBest)
-            {
-                float stamp = Mathf.Clamp01((t - BadgeT0) / (BadgeT1 - BadgeT0));
-                badgeGroup.alpha = stamp;
-                badge.localScale = Vector3.one * Mathf.LerpUnclamped(BadgeScale, 1f, EaseOutBack(stamp, BadgeBack));
-                if (!badgeFired && t >= BadgeT0)
+                if (i < earned)
                 {
-                    badgeFired = true;
-                    Sfx.Play(Sfx.Id.Star);
-                }
-                DrawRing(badgeRing, skipped ? -1f : (t - BadgeT0) / StarRingTime, StarRingR0, StarRingR1, StarRingW0, StarRingW1);
-            }
-            else DrawRing(badgeRing, -1f, 0f, 0f, 0f, 0f);
+                    var v = happy[i];
+                    if (!v.root.gameObject.activeSelf) continue;
+                    float w = Mathf.Clamp01((t - popEnd[i]) / WiggleRamp); // 0 while popping
+                    float rot = v.tilt + w * WiggleDeg * Mathf.Sin(2.3f * t + i * 1.7f);
+                    float sc = starScale * popScale[i] * (1f + w * WiggleScale * Mathf.Sin(3.3f * t + i));
+                    v.root.localEulerAngles = new Vector3(0f, 0f, rot);
+                    v.root.localScale = new Vector3(sc, sc, 1f);
 
-            prevBest.color = WithAlpha(Theme.InkSoft, Mathf.Clamp01((t - PrevT0) / (PrevT1 - PrevT0)));
+                    bool blink = Mathf.Repeat(t + i * 0.9f, BlinkEvery) < BlinkTime;
+                    var eye = new Vector3(1f, blink ? 0.15f : 1f, 1f);
+                    v.eyeL.localScale = eye;
+                    v.eyeR.localScale = eye;
+
+                    for (int k = 0; k < v.sparkles.Count; k++)
+                    {
+                        float a = 0.5f + 0.5f * Mathf.Sin(4f * t + k * 2.1f + i * 1.3f);
+                        v.sparkles[k].localScale = Vector3.one * (0.35f + 0.65f * a);
+                        v.sparkleG[k].color = WithAlpha(SparkleColor, a);
+                    }
+                }
+                else
+                {
+                    var v = sleepy[i];
+                    float u = Mathf.Repeat(t + i * 0.8f, ZLoop) / ZLoop;
+                    v.z.anchoredPosition = new Vector2(Theme.D(v.zBase.x + 3f * u), Theme.D(v.zBase.y + ZRise * u));
+                    v.zText.color = WithAlpha(Theme.InkSoft, Mathf.Sin(Mathf.PI * u));
+                }
+            }
         }
 
         void SeedConfetti()
@@ -528,7 +764,8 @@ namespace ArrowPuzzle
             {
                 if (age >= ConfettiLife) return;
                 confettiOn = true;
-                confettiOrigin = new Vector2(0f, -CardTopAt(ConfettiT0)); // top centre of the card when they fire
+                // top of the stars row when they fire
+                confettiOrigin = new Vector2(0f, -(BodyOffsetAt(ConfettiT0) + Theme.D(midY - MidD * 0.5f * starScale)));
                 foreach (var c in confetti) c.gameObject.SetActive(true);
             }
             if (age >= ConfettiLife)
@@ -569,29 +806,6 @@ namespace ArrowPuzzle
             ring.SetPoints(pts);
         }
 
-        /// <summary>Letter spacing for a single-line centred Text: spreads its glyph quads evenly around the centre.</summary>
-        sealed class LetterSpacing : BaseMeshEffect
-        {
-            public float spacing; // canvas units between neighbouring glyphs
-            static readonly List<UIVertex> verts = new List<UIVertex>();
-
-            public override void ModifyMesh(VertexHelper vh)
-            {
-                if (!IsActive() || spacing == 0f) return;
-                verts.Clear();
-                vh.GetUIVertexStream(verts); // 6 vertices per glyph quad
-                float mid = (verts.Count / 6 - 1) * 0.5f;
-                for (int i = 0; i < verts.Count; i++)
-                {
-                    var v = verts[i];
-                    v.position.x += (i / 6 - mid) * spacing;
-                    verts[i] = v;
-                }
-                vh.Clear();
-                vh.AddUIVertexTriangleStream(verts);
-            }
-        }
-
         // ------------------------------------------------------------------ easing
 
         static Color WithAlpha(Color c, float a)
@@ -616,16 +830,6 @@ namespace ArrowPuzzle
         {
             float c3 = c1 + 1f, a = x - 1f;
             return 1f + c3 * a * a * a + c1 * a * a;
-        }
-
-        static float EaseOutBounce(float x)
-        {
-            const float n1 = 7.5625f, d1 = 2.75f;
-            if (x < 1f / d1) return n1 * x * x;
-            if (x < 2f / d1) { x -= 1.5f / d1; return n1 * x * x + 0.75f; }
-            if (x < 2.5f / d1) { x -= 2.25f / d1; return n1 * x * x + 0.9375f; }
-            x -= 2.625f / d1;
-            return n1 * x * x + 0.984375f;
         }
     }
 }

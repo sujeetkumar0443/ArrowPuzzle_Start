@@ -15,6 +15,7 @@ namespace ArrowPuzzle
         AudioSource src;
         AudioClip[] clips;
         const int Rate = 44100;
+        static readonly float[] WinNotes = { 523.25f, 659.25f, 783.99f, 1046.5f };
 
         public static void Init(GameObject host)
         {
@@ -64,10 +65,9 @@ namespace ArrowPuzzle
             clips[(int)Id.Error] = Make("error", 0.26f, t => Mathf.Sign(Mathf.Sin(2f * Mathf.PI * 150f * t)) * 0.7f * Mathf.Exp(-t * 8f));
             clips[(int)Id.Win] = Make("win", 0.7f, t =>
             {
-                float[] notes = { 523.25f, 659.25f, 783.99f, 1046.5f };
                 int idx = Mathf.Min(3, (int)(t / 0.12f));
                 float lt = t - idx * 0.12f;
-                return Mathf.Sin(2f * Mathf.PI * notes[idx] * t) * Mathf.Exp(-lt * 6f);
+                return Mathf.Sin(2f * Mathf.PI * WinNotes[idx] * t) * Mathf.Exp(-lt * 6f);
             });
             clips[(int)Id.Hint] = Make("hint", 0.18f, t => Mathf.Sin(2f * Mathf.PI * (t < 0.08f ? 1100f : 1500f) * t) * Mathf.Exp(-t * 14f));
             clips[(int)Id.Lose] = clips[(int)Id.Error];

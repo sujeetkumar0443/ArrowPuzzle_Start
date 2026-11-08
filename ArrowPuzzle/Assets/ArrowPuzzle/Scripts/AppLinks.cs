@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// Store / share / privacy links and the actions behind the Settings "MORE" rows. Every action tells Ads first, so
+    /// Store / share links and the actions behind the Settings "MORE" rows. Every action tells Ads first, so
     /// the trip to the other app doesn't bring an app open ad on the way back. In the Editor they only log.
     /// </summary>
     public static class AppLinks
@@ -12,16 +12,10 @@ namespace ArrowPuzzle
         public static string PlayStoreWebUrl { get { return "https://play.google.com/store/apps/details?id=" + Application.identifier; } }
         public static string PlayStoreMarketUrl { get { return "market://details?id=" + Application.identifier; } }
 
-        // REPLACE with my real privacy policy URL before release
-        public const string PrivacyPolicyUrl = "https://example.com/arrow-puzzle-privacy";
-
         public static string ShareMessage
         {
             get { return "Try Arrow Puzzle! Tap the arrows, slide them out and solve every picture. " + PlayStoreWebUrl; }
         }
-
-        /// <summary>False while PrivacyPolicyUrl is still the example.com placeholder.</summary>
-        public static bool IsPrivacyPolicySet { get { return !PrivacyPolicyUrl.Contains("example.com"); } }
 
         const float AppOpenSkipSeconds = 5f; // the player is just coming back from another app
 
@@ -85,19 +79,6 @@ namespace ArrowPuzzle
 #else
             Application.OpenURL(PlayStoreWebUrl);
 #endif
-        }
-
-        /// <summary>Opens the privacy policy. False (nothing opened) while the URL is still the placeholder.</summary>
-        public static bool OpenPrivacyPolicy()
-        {
-            if (!IsPrivacyPolicySet)
-            {
-                Debug.LogWarning("[AppLinks] PrivacyPolicyUrl is still the example.com placeholder");
-                return false;
-            }
-            Ads.SuppressAppOpenFor(AppOpenSkipSeconds);
-            Application.OpenURL(PrivacyPolicyUrl);
-            return true;
         }
     }
 }

@@ -1,0 +1,77 @@
+# Unity project lives in ArrowPuzzle/. Assets/, Packages/, ProjectSettings/ and all .meta files stay tracked.
+
+# ---- Unity generated folders ----
+/ArrowPuzzle/[Ll]ibrary/
+/ArrowPuzzle/[Tt]emp/
+/ArrowPuzzle/[Oo]bj/
+/ArrowPuzzle/[Ll]ogs/
+/ArrowPuzzle/[Uu]ser[Ss]ettings/
+/ArrowPuzzle/[Bb]uild/
+/ArrowPuzzle/[Bb]uilds/
+/ArrowPuzzle/[Mm]emoryCaptures/
+/ArrowPuzzle/[Rr]ecordings/
+/ArrowPuzzle/.utmp/
+/ArrowPuzzle/Assets/AssetStoreTools*
+/ArrowPuzzle/Assets/Plugins/Editor/JetBrains*
+
+# ---- IDE / solution files ----
+.vs/
+.vscode/
+.idea/
+.gradle/
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.pdb.meta
+*.mdb.meta
+
+# ---- Builds, signing and symbols (never commit) ----
+*.keystore
+*.jks
+*.aab
+*.apk
+*.ipa
+*.symbols.zip
+*_mapping.txt
+mapping.txt
+crashlytics-build.properties
+sysinfo.txt
+
+# ---- Firebase config (repo may be public) ----
+# google-services.json and the two files the Firebase editor plugin generates from it
+# (same API key / project IDs). Keep the real files locally; Unity regenerates the derived ones.
+google-services.json
+google-services.json.meta
+GoogleService-Info.plist
+GoogleService-Info.plist.meta
+/ArrowPuzzle/Assets/StreamingAssets/google-services-desktop.json
+/ArrowPuzzle/Assets/StreamingAssets/google-services-desktop.json.meta
+/ArrowPuzzle/Assets/Plugins/Android/FirebaseApp.androidlib/res/values/google-services.xml
+
+# ---- Tool caches ----
+.code-review-graph/
+
+# ---- OS junk ----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.tmp
+*.swp
+*~

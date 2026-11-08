@@ -37,6 +37,17 @@ namespace ArrowPuzzle
             rt.offsetMax = Vector2.zero;
         }
 
+        /// <summary>Stretches rt (a child of a full-screen rect) over Screen.safeArea: below the notch, above the gesture bar.</summary>
+        public static void FitSafeArea(RectTransform rt)
+        {
+            if (Screen.width <= 0 || Screen.height <= 0) { Fill(rt); return; }
+            Rect s = Screen.safeArea;
+            rt.anchorMin = new Vector2(s.xMin / Screen.width, s.yMin / Screen.height);
+            rt.anchorMax = new Vector2(s.xMax / Screen.width, s.yMax / Screen.height);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+
         /// <summary>Fixed-size rect in design px. Pivot equals anchor, so pos is the offset of that point from the same point of the parent.</summary>
         public static void PlaceD(RectTransform rt, Vector2 anchor, Vector2 posD, Vector2 sizeD)
         {
@@ -266,7 +277,6 @@ namespace ArrowPuzzle
         }
     }
 
-    /// <summary>Small squash effect while a button is pressed.</summary>
     /// <summary>
     /// Gloss sweeping across a button (see Ui.AddShimmer). Lives on the "ShimmerClip" child, whose Mask clips the
     /// stripes to the button's rounded shape. Sizes follow the button's rect, so it also works under layout groups.
@@ -335,6 +345,7 @@ namespace ArrowPuzzle
         }
     }
 
+    /// <summary>Small squash effect while a button is pressed.</summary>
     public class PressScale : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
     {
         public void OnPointerDown(PointerEventData e) { transform.localScale = Vector3.one * 0.95f; }

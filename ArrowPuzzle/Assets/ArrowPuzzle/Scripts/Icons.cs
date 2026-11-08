@@ -1,10 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace ArrowPuzzle
 {
-    public enum Icon { Bulb, Star, Heart, Grid, Gear, Back, Pause, Restart, Home, Play, Sound, Vibrate, Lock, ArrowRight, Share, Shield, Chevron }
+    public enum Icon { Bulb, Star, Heart, Gear, Back, Pause, Restart, Home, Play, Sound, Vibrate, Lock, ArrowRight, Share, Shield, Chevron, Music }
 
     /// <summary>
     /// Icons drawn in code (stroke polylines or generated sprites), copied from the design's 24x24 icon set.
@@ -27,13 +26,6 @@ namespace ArrowPuzzle
                 case Icon.Pause:
                     Rect(rt, 5, 4, 5, 16, 2, color, sizeD);
                     Rect(rt, 14, 4, 5, 16, 2, color, sizeD);
-                    break;
-
-                case Icon.Grid:
-                    Rect(rt, 3, 3, 8, 8, 2, color, sizeD);
-                    Rect(rt, 13, 3, 8, 8, 2, color, sizeD);
-                    Rect(rt, 3, 13, 8, 8, 2, color, sizeD);
-                    Rect(rt, 13, 13, 8, 8, 2, color, sizeD);
                     break;
 
                 case Icon.Back:
@@ -118,6 +110,12 @@ namespace ArrowPuzzle
 
                 case Icon.Chevron:
                     Stroke(rt, color, 2.6f, s, P(9, 5), P(16, 12), P(9, 19));
+                    break;
+
+                case Icon.Music:
+                    Stroke(rt, color, 2.2f, s, P(9.5f, 18), P(9.5f, 6), P(19.5f, 4), P(19.5f, 16));
+                    Rect(rt, 4, 15, 6.5f, 6, 3, color, sizeD);
+                    Rect(rt, 14, 13, 6.5f, 6, 3, color, sizeD);
                     break;
             }
             return rt;

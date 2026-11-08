@@ -33,7 +33,6 @@ namespace ArrowPuzzle
         public static Color Locked = Hex("#E3DACB");
         public static Color Dot = Hex("#DDD5C6");
         public static Color Tile = Hex("#F5F0E6"); // board cell tile on shaped (masked) boards
-        public static Color SilhouetteLocked = Hex("#B9AF9E"); // level silhouette on a locked level card
         public static Color SwitchOff = Hex("#BDB5A6");
         public static Color Hint = Hex("#1D3557");
         // Settings lists (ScreenSettings)
@@ -44,7 +43,26 @@ namespace ArrowPuzzle
         public static Color Chevron = Hex("#B8B1A2");
         public static Color FootNote = Hex("#9A9384");     // "Arrow Puzzle · Version x"
         public static Color LinkBlue = Hex("#3E8EDE");     // Share icon square
-        public static Color LinkGreen = Hex("#2FA866");    // Privacy Policy icon square
+        public static Color LinkGreen = Hex("#2FA866");    // green icon square (no Settings row uses it now)
+        // Home level ruler (ScreenHome)
+        public static Color RulerTrack = Hex("#E6DFD0");      // ruler track behind the teal fill
+        public static Color LockedLevelFill = Hex("#EDE7DA"); // locked level circle
+        public static Color LockedLevelEdge = Hex("#DCD3C1");
+        public static Color LockedLevelIcon = Hex("#B3A994");
+        // Level map (ScreenMap)
+        public static Color MapStarEmpty = Hex("#E6E0D3");    // unearned star above a done tile
+        public static Color MapGrassA = Hex("#8CCB6A");       // placeholder segment A (until valley_seg_A.png)
+        public static Color MapGrassB = Hex("#82C25F");       // placeholder segment B
+        public static Color MapRoad = Hex("#EBD9A8");         // placeholder sand road
+        public static Color MapRoadEdge = Hex("#D3BC84");     // placeholder road edge
+        // map tiles (the current tile uses Accent / AccentShadow); edit only these to try other tile colours
+        public static Color MapDoneFace = Hex("#3D7BF0");     // done tile face (white number); also the blue lock-burst bits
+        public static Color MapDoneSide = Hex("#2556B8");     // done tile side face
+        public static Color MapLockedFace = Hex("#A9B4BF");   // locked tile face
+        public static Color MapLockedSide = Hex("#7E8A96");   // locked tile side face; also the lock badge icon
+        public static Color MapLockedNumber = Hex("#F4F6F8"); // locked tile number; also the disabled map PLAY label
+        public static Color MapPlayFace = Hex("#E4572E");     // the map's PLAY button (white label and icon)
+        public static Color MapPlayShadow = Hex("#B23F1D");   // its bottom edge
         public static Color Dim = new Color(38f / 255f, 50f / 255f, 63f / 255f, 0.62f);
         public static Color PopupShadow = new Color(0f, 0f, 0f, 0.12f);
 

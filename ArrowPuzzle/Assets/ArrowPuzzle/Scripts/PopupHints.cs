@@ -5,8 +5,9 @@ using UnityEngine.UI;
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// Out of hints: watch a rewarded video for +3 hints, or "No thanks". Opened only by ScreenGame's hint button when
-    /// hints are 0. The reward adds the hints (badge + toast) and closes; it never shows a hint by itself. A failed or
+    /// Out of hints: watch a rewarded video for +3 hints, or "No thanks". Opened by ScreenGame's hint button when hints
+    /// are 0, and by the Home hints pill (pill or +) at any count (title "Get more hints" while hints are left). The reward adds
+    /// the hints (in the game: badge + toast) and closes; it never shows a hint by itself. A failed or
     /// skipped video keeps the popup open with a short message. Rises in like the other popups. Unscaled time.
     /// </summary>
     public class PopupHints : AppScreen
@@ -25,7 +26,7 @@ namespace ArrowPuzzle
         RectTransform card;
         CanvasGroup cardGroup, watchGroup, noGroup;
         Button watch;
-        Text status, watchLabel;
+        Text status, watchLabel, title;
         Coroutine run;
         bool waiting;
         int request; // bumped on every show / request, so a late ad result can't touch a newer state
@@ -45,7 +46,7 @@ namespace ArrowPuzzle
             cardGroup = cardImg.gameObject.AddComponent<CanvasGroup>();
 
             // 1. title
-            Ui.Label(card, "Out of hints", 34f, Theme.Ink, Weight.Bold);
+            title = Ui.Label(card, "Out of hints", 34f, Theme.Ink, Weight.Bold); // "Get more hints" with hints left (OnShow)
 
             // 2. message, wrapped to the card width
             var msg = Ui.Label(card, "Watch a short video to get " + Reward + " more hints.", 19f, Theme.InkSoft, Weight.Medium);
@@ -76,6 +77,8 @@ namespace ArrowPuzzle
         public override void OnShow()
         {
             request++;
+            // the game opens this only at 0 hints ("Out of hints"); Home's hints pill opens it at any count
+            title.text = Save.Hints > 0 ? "Get more hints" : "Out of hints";
             SetWaiting(false);
             status.gameObject.SetActive(false);
             Apply(0f);
@@ -132,6 +135,12 @@ namespace ArrowPuzzle
         void WatchVideo()
         {
             if (waiting) return; // already loading / playing
+            if (Ads.IsRewardedBusy)
+            {
+                // ShowRewarded would ignore this call and neither callback would run: never start waiting for it
+                status.gameObject.SetActive(true);
+                return;
+            }
             int id = ++request;
             status.gameObject.SetActive(false);
             SetWaiting(true);
@@ -142,8 +151,8 @@ namespace ArrowPuzzle
         void OnRewarded(int id)
         {
             var game = GameApp.I.Get<ScreenGame>();
-            if (game != null) game.GrantHints(Reward);
-            else Save.Hints = Save.Hints + Reward;
+            if (game != null && game.Root.gameObject.activeInHierarchy) game.GrantHints(Reward); // badge + "+3 hints" toast
+            else Save.Hints = Save.Hints + Reward; // opened from Home: its pill follows Save.HintsChanged
             if (id == request && GameApp.I.IsOpen<PopupHints>()) GameApp.I.Close("PopupHints");
         }
 

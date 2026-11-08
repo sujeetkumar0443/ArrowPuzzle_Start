@@ -1,0 +1,12 @@
+<linker>
+  <!-- Screens and popups are only found by reflection (GameApp.CreateScreens): stripping would remove them. -->
+  <assembly fullname="Assembly-CSharp" preserve="all" />
+
+  <!-- Google Mobile Ads uses reflection and Java callbacks. Adds the DLLs GoogleMobileAds/link.xml does not cover. -->
+  <assembly fullname="GoogleMobileAds" ignoreIfMissing="1" preserve="all" />
+  <assembly fullname="GoogleMobileAds.Core" ignoreIfMissing="1" preserve="all" />
+  <assembly fullname="GoogleMobileAds.Common" ignoreIfMissing="1" preserve="all" />
+  <assembly fullname="GoogleMobileAds.Android" ignoreIfMissing="1" preserve="all" />
+  <assembly fullname="GoogleMobileAds.Ump" ignoreIfMissing="1" preserve="all" />
+  <assembly fullname="GoogleMobileAds.Ump.Android" ignoreIfMissing="1" preserve="all" />
+</linker>

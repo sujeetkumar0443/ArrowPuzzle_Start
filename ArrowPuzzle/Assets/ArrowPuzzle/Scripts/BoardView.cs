@@ -55,8 +55,19 @@ namespace ArrowPuzzle
 
         public Vector2 Size { get; private set; }
         public int Lives { get { return lives; } }
-        public int Remaining { get { return remaining; } }
+        public int Remaining { get { return remaining; } } // arrows still on the board (analytics)
         public bool Locked { get; set; }
+
+        /// <summary>True while any arrow is moving (flying off or bumping into a blocker). Read-only.</summary>
+        public bool AnyMoving
+        {
+            get
+            {
+                for (int i = 0; i < pieces.Count; i++)
+                    if (pieces[i].moving || pieces[i].busy) return true;
+                return false;
+            }
+        }
 
         RectTransform rt;
         LevelData level;
@@ -219,8 +230,6 @@ namespace ArrowPuzzle
         {
             StopAllCoroutines();
             hintFx = null; // a new level / restart starts without the old hint highlight
-            nudgeFx = null;
-            nudgeList.Clear();
             foreach (var p in pieces) if (p.g != null) Destroy(p.g.gameObject);
             foreach (var g in extras) if (g != null) Destroy(g);
             pieces.Clear();
@@ -342,7 +351,7 @@ namespace ArrowPuzzle
                 p.moving = true;
                 p.busy = true;
                 foreach (var c in p.d.cells) owner[c.x, c.y] = -1;
-                Sfx.Play(Sfx.Id.Slide);
+                SoundFx.PlayExit();
                 p.fx = StartCoroutine(ExitRoutine(p));
                 RaiseTapped();
                 return;
@@ -659,8 +668,6 @@ namespace ArrowPuzzle
             return 1f - a * a * a;
         }
 
-        // ------------------------------------------------------------------ effects
-
         // ------------------------------------------------------------------ board collapse (loss)
 
         Coroutine collapseFx, reviveFx;
@@ -740,51 +747,6 @@ namespace ArrowPuzzle
                 yield return null;
             }
             collapseFx = null;
-        }
-
-        // ------------------------------------------------------------------ preview helpers (Home pager)
-
-        const float NudgeAmp = 0.15f, NudgeSpeed = 3.6f, NudgeStagger = 0.7f; // cells, rad/s, rad per arrow
-        Coroutine nudgeFx;
-        readonly List<Piece> nudgeList = new List<Piece>();
-
-        /// <summary>Idle preview: the arrows that are free right now nudge forward and back (unscaled time).</summary>
-        public void SetNudge(bool on)
-        {
-            if (nudgeFx != null) StopCoroutine(nudgeFx);
-            nudgeFx = null;
-            foreach (var p in nudgeList)
-                if (!p.removed && !p.moving && !p.busy && p.g != null) { p.dist = 0f; Render(p); }
-            nudgeList.Clear();
-            if (!on || level == null || !isActiveAndEnabled) return;
-
-            foreach (var p in pieces)
-                if (!p.removed && !p.moving && !p.busy && Check(p) == State.Free) nudgeList.Add(p);
-            if (nudgeList.Count > 0) nudgeFx = StartCoroutine(NudgeRoutine());
-        }
-
-        IEnumerator NudgeRoutine()
-        {
-            float t = 0f;
-            while (true)
-            {
-                t += Time.unscaledDeltaTime;
-                for (int i = 0; i < nudgeList.Count; i++)
-                {
-                    var p = nudgeList[i];
-                    if (p.removed || p.g == null) continue;
-                    p.dist = Mathf.Max(0f, Mathf.Sin(t * NudgeSpeed - i * NudgeStagger)) * NudgeAmp * cell;
-                    Render(p);
-                }
-                yield return null;
-            }
-        }
-
-        /// <summary>Preview of a locked mode: every arrow in the collapse grey (or back to its own colour).</summary>
-        public void SetGrey(bool on)
-        {
-            foreach (var p in pieces)
-                if (!p.removed && p.g != null) p.g.color = on ? CollapseGrey : p.baseColor;
         }
 
         /// <summary>Revive: arrows scale in from 0.6 to 1 around their own centres.</summary>

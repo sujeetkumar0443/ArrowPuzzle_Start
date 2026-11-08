@@ -97,6 +97,15 @@ namespace ArrowPuzzle
             anim = null; // coroutines stop with the object
         }
 
+        /// <summary>A finger held while the app goes away never sends its release: forget it, or taps stay blocked.</summary>
+        void OnApplicationPause(bool paused)
+        {
+            if (!paused) return;
+            fingers.Clear();
+            pos.Clear();
+            tapLive = rightDown = false;
+        }
+
         void Update()
         {
             bool zoomed = zoom > MinZoom + 0.001f;
