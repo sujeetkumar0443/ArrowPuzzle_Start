@@ -19,6 +19,9 @@ namespace ArrowPuzzle
         /// <summary>Consent is known and does not allow ad requests (ads not started): no ad is coming now.</summary>
         public static bool AdsBlocked { get { return consentDone && !adsStarted && !ConsentService.CanRequestAds; } }
 
+        /// <summary>Consent no longer gates startup: UMP answered (or timed out), or a previous consent already started ads. The splash waits for it.</summary>
+        public static bool ConsentSettled { get { return consentDone || adsStarted; } }
+
         public static void Begin()
         {
             if (started) return;
