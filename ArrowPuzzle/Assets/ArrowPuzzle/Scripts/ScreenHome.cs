@@ -292,6 +292,7 @@ namespace ArrowPuzzle
             mark.Apply(Wordmark.End);
             Refresh();
             Layout();
+            Debug.Log("[Coins] Home shows " + coins.text + " (saved " + Save.Coins + ")");
         }
 
         public override void OnHide()

@@ -47,7 +47,7 @@ namespace ArrowPuzzle
         public static void LevelWon(int g)
         {
             UnlockAfter(g);
-            AddCoins(WinCoins);
+            AddCoins(WinCoins, "level " + g + " won");
         }
 
         /// <summary>The unlock rule shared by a win and a skip: finishing the highest unlocked level opens the next one.</summary>
@@ -142,13 +142,14 @@ namespace ArrowPuzzle
             get { return Mathf.Max(0, PlayerPrefs.GetInt(CoinsKey, 0)); }
         }
 
-        /// <summary>Adds n coins (negative spends; the balance stays within 0..int.MaxValue) and saves.</summary>
-        public static void AddCoins(int n)
+        /// <summary>Adds n coins (negative spends; the balance stays within 0..int.MaxValue), saves and logs it.</summary>
+        public static void AddCoins(int n, string reason = null)
         {
             if (n == 0) return;
             long total = (long)Coins + n;
             PlayerPrefs.SetInt(CoinsKey, (int)System.Math.Max(0L, System.Math.Min(int.MaxValue, total)));
             PlayerPrefs.Save();
+            Debug.Log("[Coins] " + (n > 0 ? "+" : "") + n + " -> total " + Coins + " (" + (reason ?? "no reason given") + ")");
             if (CoinsChanged != null) CoinsChanged();
         }
 

@@ -469,7 +469,7 @@ namespace ArrowPuzzle
         {
             if (id != wheelId || state != Wheel.Waiting) return;
             int bonus = Save.WinCoins * (mult - 1);
-            if (bonus > 0) Save.AddCoins(bonus);
+            if (bonus > 0) Save.AddCoins(bonus, "bonus spin x" + mult + ", level " + GameApp.I.CurrentLevel);
             state = Wheel.Collected;
             GameApp.I.BonusMult = mult;
             GameApp.I.SkipInterstitialOnce = true;
