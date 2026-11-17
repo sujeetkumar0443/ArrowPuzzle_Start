@@ -73,6 +73,13 @@ namespace ArrowPuzzle
         };
 
         public static Sprite Rounded, Circle, Heart, Star, Triangle, DotTile;
+
+        /// <summary>
+        /// High-resolution, mipmapped versions of Rounded / Circle for big shapes that must stay sharp (Home). RoundedHD is
+        /// 9-sliced with a RoundedHDRadius px corner: set Image.pixelsPerUnitMultiplier = RoundedHDRadius / D(radiusD).
+        /// </summary>
+        public static Sprite RoundedHD, CircleHD;
+        public const int RoundedHDRadius = 96;
         static Font fMedium, fSemi, fBold;
         static bool inited;
 
@@ -100,6 +107,8 @@ namespace ArrowPuzzle
 
             Rounded = MakeRounded(64, 24, true);
             Circle = MakeRounded(64, 32, false);
+            RoundedHD = MakeRounded(256, RoundedHDRadius, true, true);
+            CircleHD = MakeRounded(256, 128, false, true);
             Heart = MakeHeart(128);
             Star = MakePolygon(64, new[]
             {
@@ -142,9 +151,16 @@ namespace ArrowPuzzle
             return t;
         }
 
-        static Sprite MakeRounded(int size, int radius, bool sliced)
+        static Sprite MakeRounded(int size, int radius, bool sliced, bool mips = false)
         {
-            var tex = NewTex(size, false);
+            Texture2D tex;
+            if (mips)
+            {
+                tex = new Texture2D(size, size, TextureFormat.RGBA32, true);
+                tex.filterMode = FilterMode.Trilinear;
+                tex.wrapMode = TextureWrapMode.Clamp;
+            }
+            else tex = NewTex(size, false);
             var px = new Color32[size * size];
             for (int y = 0; y < size; y++)
             {
@@ -159,7 +175,7 @@ namespace ArrowPuzzle
                 }
             }
             tex.SetPixels32(px);
-            tex.Apply();
+            tex.Apply(mips);
             Vector4 border = sliced ? new Vector4(radius, radius, radius, radius) : Vector4.zero;
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
         }

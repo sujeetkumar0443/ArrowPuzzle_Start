@@ -1,73 +1,82 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// "Level ruler" Home: top bar (logo, hints pill (opens PopupHints), star pill, settings), "LEVEL" and the big selected level number, its
-    /// difficulty and type, a horizontal ruler of level circles (drag to scroll, tap to pick; snaps to unlocked levels
-    /// only), earlier / next, the solved count and PLAY. The ruler reuses a pool of 9 circles. Everything under the
-    /// top bar scales down to fit above the banner on short phones. Design px (y from the top of the safe area),
-    /// unscaled time.
+    /// Home: cream background with dots and faint drifting arrows (like the splash). Top bar: settings (left), coin pill
+    /// (right). The splash's wordmark in its end state at the top third. A five-slot level ruler: the selected level big
+    /// and coral with a pulsing ring, two levels left, two right (locked ones beige with a lock), prev / next buttons at
+    /// the edges. PLAY ("LEVEL N" over "PLAY", breathing) and the "SKIPS TODAY" row sit above the banner. No layout
+    /// groups: every position is fixed in design px (y from the top of the safe area) and button rects are snapped to
+    /// whole pixels. Unscaled time.
     /// </summary>
     public class ScreenHome : AppScreen
     {
-        // ---- layout (design px, y from the top)
-        const float Side = 20f, RowCY = 38f;                        // top bar: y 20, 36 high
-        const float LogoD = 36f, LogoRadius = 11f;
-        const float SettingsD = 46f, PillH = 40f, PillGap = 10f, CardEdge = 3f;
-        const float PlusD = 26f, PlusBarW = 12f, PlusBarH = 3.5f, PlusHitD = 44f; // hints +: circle, bars, tap area
-        const float BodyTop = 88f, BodyBottom = 683f;               // scaled block: "LEVEL" .. PLAY incl. its shadow
-        const float BottomPad = 16f, BannerGap = 8f, MinScale = 0.6f;
-        const float LevelLabelY = 100f, NumberY = 120f, NumberH = 170f, InfoY = 290f, InfoH = 28f, InfoPadX = 16f, InfoPadY = 4f;
-        const float RulerY = 424f, RulerH = 110f, TrackH = 8f, Spacing = 80f;
-        const float SelectedD = 80f, RingW = 8f, CircleD = 52f, BorderW = 5f, LockD = 22f;
-        const float StepY = 480f, StepW = 110f, StepH = 36f;
-        const float SolvedY = 530f, SolvedH = 26f;
-        const float PlayX = 24f, PlayW = 342f, PlayY = 582f, PlayH = 94f, PlayEdge = 7f, PlayIconD = 34f;
+        // ---- top bar
+        const float Side = 20f, TopY = 16f;
+        const float SettingsD = 52f, SettingsR = 15f, GearD = 26f;
+        const float PillH = 40f, CoinD = 24f, PillPadL = 8f, PillGap = 8f, PillPadR = 16f, CoinFont = 20f;
 
-        // ---- behaviour (s, levels)
-        const float SnapTime = 0.25f, PopTime = 0.2f, PopScale = 1.12f;
-        const float OverScroll = 0.6f;                              // how far past the ends a drag may pull
-        const float StepDisabledAlpha = 0.4f;
-        const int Pool = 9;
+        // ---- wordmark: shaft line at the top third, clamped
+        const float MarkFrac = 0.26f, MarkMinY = 150f, MarkMaxY = 220f, MarkInkBelow = 56f;
 
-        // ---- colours: the app palette (Theme), like Settings
-        static readonly Color Grey = Theme.SectionLabel;
-        static readonly Color Ring = new Color(Theme.Teal.r, Theme.Teal.g, Theme.Teal.b, 0.2f); // selected circle glow
+        // ---- ruler (x from the centre)
+        const float BigD = 78f, SmallD = 40f, NearX = 68f, FarX = 115f, TrackH = 6f;
+        const float BigFont = 34f, SmallFont = 16f, LockD = 16f, SmallEdge = 3f;
+        const float StepD = 40f, StepR = 12f, StepX = 163f, StepIconD = 22f, StepDisabledAlpha = 0.35f;
+        const float RingPeriod = 1.4f, RingGrow = 0.4f, RingAlpha = 0.35f;
+        const float PopTime = 0.2f, PopScale = 1.12f;
 
-        enum Look { Hidden, Selected, Open, Locked }
+        // ---- PLAY: 280 x 100 face + 8 px edge
+        const float PlayW = 280f, PlayH = 100f, PlayEdge = 8f, PlayR = 26f;
+        const float LevelFont = 17f, LevelY = 25f, PlayFont = 46f, PlayY = -12f; // label centres, y up from the face centre
+        const float BreathPeriod = 1.8f, BreathAmp = 0.03f;
 
-        class Circle
+        // ---- SKIPS TODAY row
+        const float SkipsH = 40f, SkipsPad = 18f, SkipsTextGap = 12f, SkipDotD = 12f, SkipDotGap = 8f, SkipsFont = 14f;
+        const int MaxSkipDots = 8;
+
+        // ---- vertical spacing
+        const float BottomPad = 16f, BannerGap = 8f, PlayToSkips = 24f;
+
+        static readonly Color SkipUsed = Theme.InkSoft;
+        static readonly Color CoinEdge = Theme.Hex("#D98E00");
+        static readonly Vector3[] corners = new Vector3[4];
+        static readonly float[] SlotX = { -FarX, -NearX, 0f, NearX, FarX };
+
+        class Slot
         {
             public RectTransform rt;
-            public Image ring, outer, inner;
+            public Image face;
             public Text number;
             public GameObject lockIcon;
-            public Look look = Look.Hidden;
-            public int shownLevel;
+            public int level;
         }
 
-        readonly Circle[] circles = new Circle[Pool];
-        Text stars, hints, levelNumber, info, solved;
-        RectTransform body, ruler, track, fill, numberRt;
-        CanvasGroup earlier, next;
+        RectTransform backdrop, settings, coinPill, ruler, rulerTrack, ring, prev, next, playRoot, skipsRow;
+        Wordmark mark;
+        Text coins, levelLabel, skipsText;
+        Image ringImg;
+        CanvasGroup prevGroup, nextGroup;
+        readonly Slot[] slots = new Slot[5];
+        readonly Image[] skipDots = new Image[MaxSkipDots];
 
         int selected = 1, unlocked = 1;
-        float pos = 1f;                  // level at the centre of the ruler (fractional while moving)
-        float snapFrom, snapTo, snapT = -1f, popT = -1f;
-        bool dragging;
-        float laidOutH = -1f, laidOutUnder = -1f, scale = 1f;
+        float popT = -1f;
+        float laidOutH = -1f, laidOutUnder = -1f, laidOutScale = -1f;
+        Rect laidOutSafe;
 
         protected override void Build()
         {
-            BuildBackground();
+            BuildBackdrop();
             BannerPlaceholder.Create(Root); // just above the background, under everything else
             BuildTopBar();
-            BuildBody();
+            mark = Wordmark.Build(Root); // end state, identical to the splash's last frame
+            BuildRuler();
+            BuildPlay();
+            BuildSkips();
 
             Root.gameObject.AddComponent<HomeTicker>().tick = Tick;
             BannerDebug.Create(Root, "ScreenHome"); // only when Ads.ShowBannerDebug
@@ -76,194 +85,195 @@ namespace ArrowPuzzle
 
         // ------------------------------------------------------------------ build
 
-        /// <summary>Solid cream, like Settings; also under the insets.</summary>
-        void BuildBackground()
+        /// <summary>Cream, dots and drifting arrows over the whole canvas (Layout matches it to the canvas), so the dot
+        /// grid lines up with the splash's.</summary>
+        void BuildBackdrop()
         {
-            var bg = Ui.Img(Root, "Bg", null, Theme.Bg);
+            backdrop = Ui.New(Root, "Backdrop");
+            var bg = Ui.Img(backdrop, "Bg", null, Theme.Bg);
             bg.raycastTarget = false;
             Ui.Fill(bg.rectTransform);
-            bg.rectTransform.offsetMin = new Vector2(0f, -Theme.D(400f));
-            bg.rectTransform.offsetMax = new Vector2(0f, Theme.D(400f));
+
+            var dots = Ui.Img(backdrop, "Dots", Theme.DotTile, Theme.CardShadow);
+            dots.type = Image.Type.Tiled;
+            dots.pixelsPerUnitMultiplier = 64f / (34f * Theme.K);
+            dots.raycastTarget = false;
+            Ui.Fill(dots.rectTransform);
+
+            DriftingArrows.Add(backdrop, 11);
         }
 
         void BuildTopBar()
         {
-            var left = new Vector2(0f, 0.5f);
-            var right = new Vector2(1f, 0.5f);
+            // settings: ink rounded square, white gear
+            var sImg = Rounded(Root, "Settings", Theme.Ink, SettingsR);
+            settings = sImg.rectTransform;
+            MakeButton(sImg, () => GameApp.I.Show("ScreenSettings"));
+            var gear = Icons.Make(settings, Icon.Gear, Theme.Card, GearD);
+            Ui.PlaceD(gear, Ui.C, Vector2.zero, new Vector2(GearD, GearD));
 
-            // logo: teal rounded square with the white app arrow
-            var logo = Ui.Img(Root, "Logo", Theme.Rounded, Theme.Teal, LogoRadius);
-            logo.raycastTarget = false;
-            Ui.PlaceD(logo.rectTransform, Ui.TL, left, new Vector2(Side, -RowCY), new Vector2(LogoD, LogoD));
-            var mark = Ui.New(logo.transform, "Mark");
-            Ui.Fill(mark);
-            mark.pivot = Ui.C;
-            var g = mark.gameObject.AddComponent<ArrowGraphic>();
-            g.raycastTarget = false;
-            g.color = Theme.Card;
-            g.thickness = Theme.D(4.5f);
-            g.headSize = Theme.D(12f);
-            g.SetPoints(new List<Vector2>
-            {
-                new Vector2(-7.5f, -8.5f) * Theme.K, new Vector2(-7.5f, 2.5f) * Theme.K, new Vector2(7f, 2.5f) * Theme.K,
-            });
-
-            // no "Arrow Puzzle" title: the hints and stars pills need the room (the logo stays)
-
-            // settings (round, right)
-            var settings = Ui.Btn(Root, "", Theme.Card, Theme.Ink, 0f, SettingsD * 0.5f, Theme.ListEdge, CardEdge,
-                                  () => GameApp.I.Show("ScreenSettings"), Icon.Gear, 24f);
-            Ui.PlaceD((RectTransform)settings.transform, Ui.TR, right, new Vector2(-Side, -RowCY), new Vector2(SettingsD, SettingsD));
-
-            // [hints][stars] left of Settings; the row grows to the left with the counts (it sizes widths, never heights)
-            var pills = Ui.New(Root, "Pills");
-            Ui.PlaceD(pills, Ui.TR, right, new Vector2(-(Side + SettingsD + PillGap), -RowCY), new Vector2(200f, PillH));
-            var row = Ui.Row(pills, PillGap, TextAnchor.MiddleRight);
-            row.childControlHeight = false;
-            pills.gameObject.AddComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            BuildHintsPill(pills);
-            HudPill.Make(pills, "Stars", Icon.Star, Theme.Gold, 10f, 14f, out stars);
-        }
-
-        /// <summary>
-        /// Bulb, hint count and a teal + circle. Tapping the pill or the + (a separate Button with a PlusHitD square tap
-        /// area around the 26 px circle) opens PopupHints at any count: the gameplay's rewarded video, +3 hints.
-        /// </summary>
-        void BuildHintsPill(RectTransform parent)
-        {
-            var pill = HudPill.Make(parent, "Hints", Icon.Bulb, Theme.Ink, 10f, (HudPill.H - PlusD) * 0.5f, out hints);
-            pill.raycastTarget = true;
-            var pillBtn = pill.gameObject.AddComponent<Button>();
-            pillBtn.targetGraphic = pill;
-            pillBtn.transition = Selectable.Transition.None;
-            pill.gameObject.AddComponent<PressScale>();
-            pillBtn.onClick.AddListener(OpenHints);
-
-            var plus = Ui.Img(pill.transform, "Plus", Theme.Circle, Theme.Teal);
-            plus.raycastTarget = false; // taps land on Hit below
-            Ui.Size(plus, PlusD, PlusD);
-            for (int i = 0; i < 2; i++)
-            {
-                var bar = Ui.Img(plus.transform, "Bar" + i, Theme.Rounded, Theme.Card, PlusBarH * 0.5f);
-                bar.raycastTarget = false;
-                Ui.PlaceD(bar.rectTransform, Ui.C, Vector2.zero, i == 0 ? new Vector2(PlusBarW, PlusBarH) : new Vector2(PlusBarH, PlusBarW));
-            }
-            // invisible tap area, centred on the circle and larger than it (spills a little past the pill)
-            var hit = Ui.Img(plus.transform, "Hit", null, Color.clear);
-            hit.raycastTarget = true;
-            Ui.PlaceD(hit.rectTransform, Ui.C, Vector2.zero, new Vector2(PlusHitD, PlusHitD));
-            var plusBtn = plus.gameObject.AddComponent<Button>();
-            plusBtn.targetGraphic = hit;
-            plusBtn.transition = Selectable.Transition.None;
-            plus.gameObject.AddComponent<PressScale>();
-            plusBtn.onClick.AddListener(OpenHints);
-        }
-
-        static void OpenHints()
-        {
-            Sfx.Play(Sfx.Id.Click);
-            GameApp.I.Open("PopupHints");
-        }
-
-        void OnHintsChanged()
-        {
-            hints.text = Save.Hints.ToString();
-        }
-
-        void BuildBody()
-        {
-            body = Ui.New(Root, "Body");
-            Ui.PlaceD(body, Ui.TC, new Vector2(0f, -BodyTop), new Vector2(390f, BodyBottom - BodyTop));
-
-            var levelLabel = Ui.Label(body, "LEVEL", 22f, Grey, Weight.Semi);
-            Center(levelLabel.rectTransform, LevelLabelY, 28f, 300f);
-
-            levelNumber = Ui.Label(body, "1", 150f, Theme.Teal, Weight.Bold);
-            numberRt = levelNumber.rectTransform;
-            Center(numberRt, NumberY, NumberH, 390f);
-
-            // "Easy · Picture" in a white pill that grows from the centre with the text
-            float infoPillH = InfoH + InfoPadY * 2f;
-            var infoPill = Ui.Img(body, "InfoPill", Theme.Rounded, Theme.Card, infoPillH * 0.5f);
-            infoPill.raycastTarget = false;
-            Center(infoPill.rectTransform, InfoY - InfoPadY, infoPillH, 200f);
-            HudPill.AddEdge(infoPill);
-            var infoRow = Ui.Row(infoPill.rectTransform, 0f);
-            int padX = Mathf.RoundToInt(Theme.D(InfoPadX)), padY = Mathf.RoundToInt(Theme.D(InfoPadY));
-            infoRow.padding = new RectOffset(padX, padX, padY, padY);
-            infoPill.gameObject.AddComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-            info = Ui.Label(infoPill.transform, "", 21f, Theme.Ink, Weight.Semi);
-
-            BuildRuler();
-
-            earlier = StepButton("‹ earlier", Ui.TL, Side, -1, TextAnchor.MiddleLeft);
-            next = StepButton("next ›", Ui.TR, -Side, 1, TextAnchor.MiddleRight);
-
-            solved = Ui.Label(body, "", 20f, Theme.Ink, Weight.Semi);
-            Center(solved.rectTransform, SolvedY, SolvedH, 360f);
-
-            var play = Ui.Btn(body, "PLAY", Theme.Teal, Theme.Card, 42f, PlayH * 0.5f, Theme.TealShadow, PlayEdge, Play, Icon.Play, PlayIconD);
-            var playRt = (RectTransform)play.transform;
-            Ui.PlaceD(playRt, Ui.TL, new Vector2(PlayX, -(PlayY - BodyTop)), new Vector2(PlayW, PlayH));
-            Ui.AddShimmer(playRt, PlayH * 0.5f);
-        }
-
-        /// <summary>Centred horizontally, top edge at design y (from the top of the screen).</summary>
-        static void Center(RectTransform rt, float y, float h, float w)
-        {
-            Ui.PlaceD(rt, Ui.TC, Ui.C, new Vector2(0f, -(y - BodyTop + h * 0.5f)), new Vector2(w, h));
+            // coin pill: ink, gold coin, count (width follows the count, see SetCoins)
+            var pill = Rounded(Root, "Coins", Theme.Ink, PillH * 0.5f);
+            pill.raycastTarget = false;
+            coinPill = pill.rectTransform;
+            var coin = Coin(coinPill, CoinD);
+            Ui.PlaceD(coin, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(PillPadL, 0f), new Vector2(CoinD, CoinD));
+            coins = Ui.Label(coinPill, "0", CoinFont, Theme.Card, Weight.Bold, TextAnchor.MiddleLeft);
+            Ui.PlaceD(coins.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(PillPadL + CoinD + PillGap, 0f), new Vector2(120f, PillH));
         }
 
         void BuildRuler()
         {
-            // input area: full width (Layout widens it when the body is scaled), centred on the ruler line
-            var area = Ui.Img(body, "Ruler", null, Color.clear);
-            ruler = area.rectTransform;
-            Center(ruler, RulerY - RulerH * 0.5f, RulerH, 390f);
-            var input = area.gameObject.AddComponent<RulerInput>();
-            input.begin = OnDragBegin;
-            input.drag = OnDragMove;
-            input.end = OnDragEnd;
-            input.click = OnRulerClick;
+            ruler = Ui.New(Root, "Ruler");
 
-            var trackImg = Ui.Img(ruler, "Track", Theme.Rounded, Theme.RulerTrack, TrackH * 0.5f);
+            var trackImg = Rounded(ruler, "Track", Theme.RulerTrack, TrackH * 0.5f);
             trackImg.raycastTarget = false;
-            track = trackImg.rectTransform;
-            Ui.PlaceD(track, Ui.C, Vector2.zero, new Vector2(390f, TrackH));
+            rulerTrack = trackImg.rectTransform;
 
-            var fillImg = Ui.Img(track, "Fill", Theme.Rounded, Theme.Teal, TrackH * 0.5f);
-            fillImg.raycastTarget = false;
-            fill = fillImg.rectTransform;
-            Ui.PlaceD(fill, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(0f, TrackH));
+            // pulsing ring behind the selected circle
+            ringImg = Ui.Img(ruler, "Ring", Theme.CircleHD, Theme.Accent);
+            ringImg.raycastTarget = false;
+            ring = ringImg.rectTransform;
+            Ui.PlaceD(ring, Ui.C, Vector2.zero, new Vector2(BigD, BigD));
 
-            for (int i = 0; i < Pool; i++) circles[i] = BuildCircle(i);
+            for (int i = 0; i < slots.Length; i++)
+            {
+                bool big = i == 2;
+                float d = big ? BigD : SmallD;
+                var s = new Slot();
+                s.face = Ui.Img(ruler, "Level_" + (i - 2), Theme.CircleHD, big ? Theme.Accent : Theme.Card);
+                s.rt = s.face.rectTransform;
+                Ui.PlaceD(s.rt, Ui.C, new Vector2(SlotX[i], 0f), new Vector2(d, d));
+                if (!big)
+                {
+                    var edge = s.face.gameObject.AddComponent<Shadow>();
+                    edge.effectColor = Theme.ListEdge;
+                    edge.effectDistance = new Vector2(0f, -Theme.D(SmallEdge));
+                    edge.useGraphicAlpha = false;
+                }
+                s.number = Ui.Label(s.rt, "", big ? BigFont : SmallFont, big ? Theme.Card : Theme.Ink, Weight.Bold);
+                Ui.PlaceD(s.number.rectTransform, Ui.C, Vector2.zero, new Vector2(d, d));
+                var lockRt = Icons.Make(s.rt, Icon.Lock, Theme.LockedLevelIcon, LockD);
+                Ui.PlaceD(lockRt, Ui.C, Vector2.zero, new Vector2(LockD, LockD));
+                s.lockIcon = lockRt.gameObject;
+
+                var btn = s.face.gameObject.AddComponent<Button>();
+                btn.targetGraphic = s.face;
+                btn.transition = Selectable.Transition.None;
+                var slot = s;
+                btn.onClick.AddListener(() =>
+                {
+                    if (slot.level < 1 || slot.level > unlocked || slot.level == selected) return;
+                    Sfx.Play(Sfx.Id.Click);
+                    Pick(slot.level);
+                });
+                slots[i] = s;
+            }
+
+            prev = StepButton("Prev", Icon.Back, -1, out prevGroup);
+            next = StepButton("Next", Icon.Chevron, 1, out nextGroup);
         }
 
-        Circle BuildCircle(int i)
+        RectTransform StepButton(string name, Icon icon, int dir, out CanvasGroup group)
         {
-            var c = new Circle();
-            c.rt = Ui.New(ruler, "Circle_" + i);
-            Ui.PlaceD(c.rt, Ui.C, Vector2.zero, new Vector2(SelectedD + RingW * 2f, SelectedD + RingW * 2f));
-            c.ring = Ui.Img(c.rt, "Ring", Theme.Circle, Ring);
-            c.outer = Ui.Img(c.rt, "Outer", Theme.Circle, Theme.Teal);
-            c.inner = Ui.Img(c.rt, "Inner", Theme.Circle, Theme.Card);
-            c.ring.raycastTarget = c.outer.raycastTarget = c.inner.raycastTarget = false;
-            c.number = Ui.Label(c.rt, "", 20f, Theme.TealShadow, Weight.Bold);
-            Ui.PlaceD(c.number.rectTransform, Ui.C, Vector2.zero, new Vector2(SelectedD, SelectedD));
-            var lockRt = Icons.Make(c.rt, Icon.Lock, Theme.LockedLevelIcon, LockD);
-            Ui.PlaceD(lockRt, Ui.C, Vector2.zero, new Vector2(LockD, LockD));
-            c.lockIcon = lockRt.gameObject;
-            c.rt.gameObject.SetActive(false);
-            return c;
+            var img = Rounded(ruler, name, Theme.Card, StepR);
+            var edge = img.gameObject.AddComponent<Shadow>();
+            edge.effectColor = Theme.ListEdge;
+            edge.effectDistance = new Vector2(0f, -Theme.D(SmallEdge));
+            edge.useGraphicAlpha = false;
+            MakeButton(img, () => Step(dir));
+            var ic = Icons.Make(img.rectTransform, icon, Theme.Ink, StepIconD);
+            Ui.PlaceD(ic, Ui.C, Vector2.zero, new Vector2(StepIconD, StepIconD));
+            Ui.PlaceD(img.rectTransform, Ui.C, new Vector2(dir * StepX, 0f), new Vector2(StepD, StepD));
+            group = img.gameObject.AddComponent<CanvasGroup>();
+            return img.rectTransform;
         }
 
-        CanvasGroup StepButton(string text, Vector2 corner, float x, int dir, TextAnchor align)
+        void BuildPlay()
         {
-            var btn = Ui.Btn(body, text, Color.clear, Grey, 18f, 0f, Color.clear, 0f, () => Step(dir), null, 24f, Weight.Medium);
-            btn.GetComponent<HorizontalLayoutGroup>().childAlignment = align;
-            Ui.PlaceD((RectTransform)btn.transform, corner, new Vector2(x, -(StepY - BodyTop)), new Vector2(StepW, StepH));
-            return btn.gameObject.AddComponent<CanvasGroup>();
+            // playRoot (snapped, breathes) > press (PressScale, Button) > edge + face + labels
+            playRoot = Ui.New(Root, "Play");
+            var press = Ui.New(playRoot, "Press");
+            Ui.Fill(press);
+
+            var edge = Rounded(press, "Edge", Theme.AccentShadow, PlayR);
+            edge.raycastTarget = false;
+            Ui.PlaceD(edge.rectTransform, Ui.BC, Vector2.zero, new Vector2(PlayW, PlayH));
+
+            var face = Rounded(press, "Face", Theme.Accent, PlayR);
+            Ui.PlaceD(face.rectTransform, Ui.TC, Vector2.zero, new Vector2(PlayW, PlayH));
+
+            levelLabel = Ui.Label(face.rectTransform, "LEVEL 1", LevelFont, Theme.Card, Weight.Semi);
+            Ui.PlaceD(levelLabel.rectTransform, Ui.C, new Vector2(0f, LevelY), new Vector2(PlayW, LevelFont * 1.4f));
+            var play = Ui.Label(face.rectTransform, "PLAY", PlayFont, Theme.Card, Weight.Bold);
+            Ui.PlaceD(play.rectTransform, Ui.C, new Vector2(0f, PlayY), new Vector2(PlayW, PlayFont * 1.3f));
+
+            var btn = press.gameObject.AddComponent<Button>();
+            btn.targetGraphic = face;
+            btn.transition = Selectable.Transition.None;
+            press.gameObject.AddComponent<PressScale>();
+            btn.onClick.AddListener(() =>
+            {
+                Sfx.Play(Sfx.Id.Click);
+                Play();
+            });
+        }
+
+        void BuildSkips()
+        {
+            var row = Rounded(Root, "SkipsToday", Theme.Ink, SkipsH * 0.5f);
+            row.raycastTarget = false;
+            skipsRow = row.rectTransform;
+
+            skipsText = Ui.Label(skipsRow, "SKIPS TODAY", SkipsFont, Theme.Card, Weight.Semi, TextAnchor.MiddleLeft);
+            Ui.PlaceD(skipsText.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(SkipsPad, 0f), new Vector2(140f, SkipsH));
+
+            for (int i = 0; i < MaxSkipDots; i++)
+            {
+                var dot = Ui.Img(skipsRow, "Dot" + i, Theme.CircleHD, Theme.Teal);
+                dot.raycastTarget = false;
+                skipDots[i] = dot;
+            }
+        }
+
+        /// <summary>RoundedHD image with a radiusD design px corner (sharp at any size).</summary>
+        static Image Rounded(Transform parent, string name, Color color, float radiusD)
+        {
+            var img = Ui.Img(parent, name, Theme.RoundedHD, color);
+            img.type = Image.Type.Sliced;
+            img.pixelsPerUnitMultiplier = Theme.RoundedHDRadius / Theme.D(radiusD);
+            return img;
+        }
+
+        static void MakeButton(Image img, Action onClick)
+        {
+            var btn = img.gameObject.AddComponent<Button>();
+            btn.targetGraphic = img;
+            btn.transition = Selectable.Transition.None;
+            img.gameObject.AddComponent<PressScale>();
+            btn.onClick.AddListener(() =>
+            {
+                Sfx.Play(Sfx.Id.Click);
+                onClick();
+            });
+        }
+
+        /// <summary>Gold coin (like the Level complete card): amber rim, gold face, small shine.</summary>
+        static RectTransform Coin(Transform parent, float d)
+        {
+            var rim = Ui.Img(parent, "Coin", Theme.CircleHD, CoinEdge);
+            rim.raycastTarget = false;
+            var rt = rim.rectTransform;
+            Dot(rt, "Face", Theme.Gold, new Vector2(0f, 0.04f * d), 0.76f * d);
+            Dot(rt, "Shine", new Color(1f, 1f, 1f, 0.55f), new Vector2(-0.16f * d, 0.18f * d), 0.2f * d);
+            return rt;
+        }
+
+        static void Dot(RectTransform parent, string name, Color c, Vector2 posD, float d)
+        {
+            var img = Ui.Img(parent, name, Theme.CircleHD, c);
+            img.raycastTarget = false;
+            Ui.PlaceD(img.rectTransform, Ui.C, posD, new Vector2(d, d));
         }
 
         // ------------------------------------------------------------------ show / refresh
@@ -274,9 +284,12 @@ namespace ArrowPuzzle
             Ads.BannerHeightChanged -= OnBannerHeight; // never twice
             Ads.BannerHeightChanged += OnBannerHeight;
             Ads.Banner(true, "ScreenHome"); // popups on top keep it; only leaving Home hides it
-            Save.HintsChanged -= OnHintsChanged;
-            Save.HintsChanged += OnHintsChanged; // PopupHints' reward updates the pill, also after the popup closed
+            Save.CoinsChanged -= SetCoins;
+            Save.CoinsChanged += SetCoins;
+            Save.SkipsChanged -= SetSkips;
+            Save.SkipsChanged += SetSkips;
             MusicPlayer.PlayHome();
+            mark.Apply(Wordmark.End);
             Refresh();
             Layout();
         }
@@ -284,168 +297,90 @@ namespace ArrowPuzzle
         public override void OnHide()
         {
             Ads.BannerHeightChanged -= OnBannerHeight;
-            Save.HintsChanged -= OnHintsChanged;
+            Save.CoinsChanged -= SetCoins;
+            Save.SkipsChanged -= SetSkips;
             Ads.Banner(false, "ScreenHome"); // ignored when the next screen (game) asks for it in the same frame
-            dragging = false;
-            snapT = -1f;
             popT = -1f;
-            numberRt.localScale = Vector3.one;
+            slots[2].rt.localScale = Vector3.one;
         }
 
-        /// <summary>Stars, solved count, and the ruler back on the highest unlocked level.</summary>
+        /// <summary>Coins, skips, and the ruler back on the highest unlocked level.</summary>
         void Refresh()
         {
-            stars.text = Save.TotalStars().ToString();
-            OnHintsChanged();
-            solved.text = Save.CompletedLevels() + " of " + LevelPath.Count + " levels solved";
-            unlocked = Save.IsUnlocked(LevelPath.Count) ? LevelPath.Count : Save.UnlockedGlobal;
-            dragging = false;
-            snapT = -1f;
+            unlocked = Save.IsUnlocked(LevelPath.Count) ? LevelPath.Count : Mathf.Clamp(Save.UnlockedGlobal, 1, LevelPath.Count);
             popT = -1f;
-            numberRt.localScale = Vector3.one;
-            pos = Save.UnlockedGlobal;
-            SetSelected(Save.UnlockedGlobal, true);
-            UpdateRuler();
+            slots[2].rt.localScale = Vector3.one;
+            SetSelected(Save.UnlockedGlobal);
+            SetCoins();
+            SetSkips();
         }
 
-        /// <summary>Kept within the unlocked levels; updates the number, its difficulty and type, and earlier / next.</summary>
-        void SetSelected(int level, bool force = false)
+        void SetCoins()
         {
-            level = Mathf.Clamp(level, 1, unlocked);
-            if (level == selected && !force) return;
-            selected = level;
-            levelNumber.text = level.ToString();
-            info.text = LevelPath.Difficulty(level) + " · " + LevelPath.TypeName(level);
-            SetStep(earlier, selected > 1);
-            SetStep(next, selected < unlocked);
+            coins.text = Save.Coins.ToString();
+            float w = PillPadL + CoinD + PillGap + coins.preferredWidth / Theme.K + PillPadR;
+            Ui.PlaceD(coinPill, Ui.TR, new Vector2(-Side, -(TopY + (SettingsD - PillH) * 0.5f)), new Vector2(Mathf.Ceil(w), PillH));
+            Snap(coinPill);
+        }
+
+        /// <summary>One dot per skip of today (4, more with a bonus): teal = left, grey = used. The row fits its content.</summary>
+        void SetSkips()
+        {
+            int left = Save.SkipsLeft;
+            int total = Mathf.Clamp(Save.SkipsPerDay + Save.SkipsBonusToday, 1, MaxSkipDots);
+            left = Mathf.Min(left, total);
+            float x = SkipsPad + skipsText.preferredWidth / Theme.K + SkipsTextGap;
+            for (int i = 0; i < MaxSkipDots; i++)
+            {
+                var dot = skipDots[i];
+                bool on = i < total;
+                dot.gameObject.SetActive(on);
+                if (!on) continue;
+                dot.color = i < left ? Theme.Teal : SkipUsed;
+                Ui.PlaceD(dot.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(x, 0f), new Vector2(SkipDotD, SkipDotD));
+                x += SkipDotD + SkipDotGap;
+            }
+            float w = Mathf.Ceil(x - SkipDotGap + SkipsPad);
+            skipsRow.sizeDelta = new Vector2(Theme.D(w), Theme.D(SkipsH));
+            Snap(skipsRow);
+        }
+
+        /// <summary>Kept within the unlocked levels; updates the ruler slots, prev / next and the PLAY label.</summary>
+        void SetSelected(int level)
+        {
+            selected = Mathf.Clamp(level, 1, unlocked);
+            levelLabel.text = "LEVEL " + selected;
+
+            float minX = 0f, maxX = 0f;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                var s = slots[i];
+                int l = selected + i - 2;
+                bool on = l >= 1 && l <= LevelPath.Count;
+                s.rt.gameObject.SetActive(on);
+                s.level = on ? l : 0;
+                if (!on) continue;
+                minX = Mathf.Min(minX, SlotX[i]);
+                maxX = Mathf.Max(maxX, SlotX[i]);
+                bool locked = l > unlocked;
+                if (i != 2) s.face.color = locked ? Theme.Locked : Theme.Card;
+                s.number.text = l.ToString();
+                s.number.gameObject.SetActive(!locked);
+                s.lockIcon.SetActive(locked);
+            }
+
+            // the track joins the visible circles
+            rulerTrack.gameObject.SetActive(maxX > minX);
+            Ui.PlaceD(rulerTrack, Ui.C, new Vector2((minX + maxX) * 0.5f, 0f), new Vector2(maxX - minX, TrackH));
+
+            SetStep(prevGroup, selected > 1);
+            SetStep(nextGroup, selected < unlocked);
         }
 
         static void SetStep(CanvasGroup g, bool on)
         {
             g.alpha = on ? 1f : StepDisabledAlpha;
             g.interactable = g.blocksRaycasts = on;
-        }
-
-        /// <summary>Places the pooled circles around pos and sets each one's look, and the filled part of the track.</summary>
-        void UpdateRuler()
-        {
-            int centre = Mathf.RoundToInt(pos);
-            for (int i = 0; i < Pool; i++)
-            {
-                var c = circles[i];
-                int level = centre - Pool / 2 + i;
-                if (level < 1 || level > LevelPath.Count)
-                {
-                    SetLook(c, Look.Hidden, 0);
-                    continue;
-                }
-                c.rt.anchoredPosition = new Vector2(Theme.D((level - pos) * Spacing), 0f);
-                SetLook(c, level == selected ? Look.Selected : level <= unlocked ? Look.Open : Look.Locked, level);
-            }
-
-            // filled from the left edge of the screen to the highest unlocked circle
-            float width = track.rect.width / Theme.K;
-            float w = Mathf.Clamp(width * 0.5f + (unlocked - pos) * Spacing, 0f, width);
-            fill.gameObject.SetActive(w >= TrackH);
-            fill.sizeDelta = new Vector2(Theme.D(w), Theme.D(TrackH));
-        }
-
-        static void SetLook(Circle c, Look look, int level)
-        {
-            if (look == c.look && level == c.shownLevel) return;
-            c.shownLevel = level;
-            if (look == Look.Hidden)
-            {
-                c.look = look;
-                c.rt.gameObject.SetActive(false);
-                return;
-            }
-            c.rt.gameObject.SetActive(true);
-            if (look != Look.Locked) c.number.text = level.ToString();
-            if (look == c.look) return;
-            c.look = look;
-
-            bool sel = look == Look.Selected;
-            float d = sel ? SelectedD : CircleD;
-            c.ring.gameObject.SetActive(sel);
-            Size(c.ring.rectTransform, SelectedD + RingW * 2f);
-            Size(c.outer.rectTransform, d);
-            Size(c.inner.rectTransform, d - BorderW * 2f);
-            c.outer.color = look == Look.Locked ? Theme.LockedLevelEdge : Theme.Teal;
-            c.inner.color = look == Look.Locked ? Theme.LockedLevelFill : Theme.Card;
-            c.inner.gameObject.SetActive(!sel);
-            c.number.gameObject.SetActive(look != Look.Locked);
-            c.number.color = sel ? Theme.Card : Theme.TealShadow;
-            c.number.fontSize = Mathf.RoundToInt(Theme.D(sel ? 32f : 20f));
-            c.lockIcon.SetActive(look == Look.Locked);
-        }
-
-        static void Size(RectTransform rt, float d)
-        {
-            Ui.PlaceD(rt, Ui.C, Vector2.zero, new Vector2(d, d));
-        }
-
-        /// <summary>
-        /// Everything under the top bar keeps its design position and scales down (from its top) when it would
-        /// reach the banner; the track and the drag area widen by 1 / scale so they still span the screen.
-        /// </summary>
-        void Layout()
-        {
-            float h = Root.rect.height / Theme.K;
-            float banner = Ads.BannerHeightDesign;
-            float under = banner > 0f ? banner + BannerGap : BottomPad;
-            if (h <= 0f || (Mathf.Abs(h - laidOutH) < 0.5f && Mathf.Abs(under - laidOutUnder) < 0.5f)) return;
-            laidOutH = h;
-            laidOutUnder = under;
-
-            float avail = h - BodyTop - under;
-            scale = Mathf.Clamp(avail / (BodyBottom - BodyTop), MinScale, 1f);
-            body.localScale = new Vector3(scale, scale, 1f);
-
-            float wide = 390f / scale;
-            ruler.sizeDelta = new Vector2(Theme.D(wide), Theme.D(RulerH));
-            track.sizeDelta = new Vector2(Theme.D(wide), Theme.D(TrackH));
-            UpdateRuler();
-        }
-
-        void OnBannerHeight()
-        {
-            Layout();
-        }
-
-        // ------------------------------------------------------------------ input
-
-        void OnDragBegin()
-        {
-            dragging = true;
-            snapT = -1f;
-        }
-
-        /// <summary>dx in the ruler's design px: the content follows the finger.</summary>
-        void OnDragMove(float dx)
-        {
-            pos = Mathf.Clamp(pos - dx / Spacing, 1f - OverScroll, Mathf.Min(unlocked + OverScroll, LevelPath.Count + OverScroll));
-            SetSelected(Mathf.RoundToInt(pos));
-            UpdateRuler();
-        }
-
-        void OnDragEnd()
-        {
-            dragging = false;
-            SetSelected(Mathf.RoundToInt(pos)); // clamped to unlocked levels: past the end snaps back
-            SlideTo(selected);
-        }
-
-        /// <summary>Tap at (x, y) design px from the ruler centre: picks the unlocked circle under it.</summary>
-        void OnRulerClick(float x, float y)
-        {
-            int level = Mathf.RoundToInt(pos + x / Spacing);
-            if (level < 1 || level > unlocked) return;
-            float r = (level == selected ? SelectedD : CircleD) * 0.5f;
-            float cx = (level - pos) * Spacing;
-            if ((x - cx) * (x - cx) + y * y > r * r) return;
-            Sfx.Play(Sfx.Id.Click); // same click as the buttons
-            Pick(level);
         }
 
         void Step(int dir)
@@ -457,16 +392,7 @@ namespace ArrowPuzzle
         void Pick(int level)
         {
             SetSelected(level);
-            SlideTo(selected);
             popT = 0f;
-            UpdateRuler();
-        }
-
-        void SlideTo(int level)
-        {
-            snapFrom = pos;
-            snapTo = level;
-            snapT = Mathf.Approximately(snapFrom, snapTo) ? -1f : 0f;
         }
 
         void Play()
@@ -475,30 +401,119 @@ namespace ArrowPuzzle
             GameApp.I.Show("ScreenGame");
         }
 
+        // ------------------------------------------------------------------ layout
+
+        /// <summary>
+        /// Top bar and wordmark from the top; SKIPS TODAY and PLAY from the bottom, above the banner (or BottomPad
+        /// without one); the ruler centred between the wordmark and PLAY. Re-run when the height, the banner, the
+        /// canvas scale or the safe area change. Button rects end on whole pixels.
+        /// </summary>
+        void Layout()
+        {
+            float h = Root.rect.height / Theme.K;
+            float banner = Ads.BannerHeightDesign;
+            float under = banner > 0f ? banner + BannerGap : BottomPad;
+            float scale = Root.lossyScale.x;
+            Rect safe = Screen.safeArea;
+            if (h <= 0f || (Mathf.Abs(h - laidOutH) < 0.5f && Mathf.Abs(under - laidOutUnder) < 0.5f &&
+                            Mathf.Approximately(scale, laidOutScale) && safe == laidOutSafe)) return;
+            laidOutH = h;
+            laidOutUnder = under;
+            laidOutScale = scale;
+            laidOutSafe = safe;
+
+            FitBackdrop();
+
+            Ui.PlaceD(settings, Ui.TL, new Vector2(Side, -TopY), new Vector2(SettingsD, SettingsD));
+            Snap(settings);
+            SetCoins();
+
+            float markY = Mathf.Clamp(h * MarkFrac, MarkMinY, MarkMaxY);
+            Ui.PlaceD(mark.Root, Ui.TC, Ui.C, new Vector2(0f, -markY), new Vector2(Wordmark.WidthD, Wordmark.HeightD));
+
+            float skipsCY = h - under - SkipsH * 0.5f;
+            Ui.PlaceD(skipsRow, Ui.TC, Ui.C, new Vector2(0f, -skipsCY), new Vector2(skipsRow.sizeDelta.x / Theme.K, SkipsH));
+            Snap(skipsRow);
+
+            float playTop = skipsCY - SkipsH * 0.5f - PlayToSkips - (PlayH + PlayEdge);
+            playRoot.localScale = Vector3.one;
+            Ui.PlaceD(playRoot, Ui.TC, new Vector2(0f, -playTop), new Vector2(PlayW, PlayH + PlayEdge));
+            Snap(playRoot);
+
+            float rulerY = (markY + MarkInkBelow + playTop) * 0.5f;
+            Ui.PlaceD(ruler, Ui.TC, Ui.C, new Vector2(0f, -rulerY), new Vector2(390f, BigD));
+            Snap(ruler);
+            // children back on their design positions first, so repeated snaps never add up
+            Ui.PlaceD(prev, Ui.C, new Vector2(-StepX, 0f), new Vector2(StepD, StepD));
+            Ui.PlaceD(next, Ui.C, new Vector2(StepX, 0f), new Vector2(StepD, StepD));
+            Snap(prev);
+            Snap(next);
+            for (int i = 0; i < slots.Length; i++)
+            {
+                float d = i == 2 ? BigD : SmallD;
+                Ui.PlaceD(slots[i].rt, Ui.C, new Vector2(SlotX[i], 0f), new Vector2(d, d));
+                Snap(slots[i].rt);
+            }
+        }
+
+        /// <summary>The backdrop covers the whole canvas (Root is the safe area), like the splash's background.</summary>
+        void FitBackdrop()
+        {
+            var canvas = GameApp.I.CanvasRoot;
+            canvas.GetWorldCorners(corners);
+            Vector2 bl = Root.InverseTransformPoint(corners[0]);
+            Vector2 tr = Root.InverseTransformPoint(corners[2]);
+            Vector2 min = Root.rect.min;
+            backdrop.anchorMin = backdrop.anchorMax = backdrop.pivot = Vector2.zero;
+            backdrop.anchoredPosition = bl - min;
+            backdrop.sizeDelta = tr - bl;
+        }
+
+        /// <summary>Moves and resizes rt (fixed anchors, unscaled) so its screen rect starts and ends on whole pixels.</summary>
+        static void Snap(RectTransform rt)
+        {
+            float s = rt.lossyScale.x;
+            if (s <= 0f) return;
+            rt.GetWorldCorners(corners); // screen space overlay: world units are pixels
+            Vector2 bl = corners[0], size = (Vector2)corners[2] - bl;
+            var blR = new Vector2(Mathf.Round(bl.x), Mathf.Round(bl.y));
+            var sizeR = new Vector2(Mathf.Round(size.x), Mathf.Round(size.y));
+            Vector2 pivotOld = bl + Vector2.Scale(rt.pivot, size);
+            Vector2 pivotNew = blR + Vector2.Scale(rt.pivot, sizeR);
+            rt.sizeDelta += (sizeR - size) / s;
+            rt.position += (Vector3)(pivotNew - pivotOld);
+        }
+
+        void OnBannerHeight()
+        {
+            Layout();
+        }
+
         // ------------------------------------------------------------------ per frame
 
-        /// <summary>From HomeTicker.Update: layout check, the ruler slide and the number pop.</summary>
+        /// <summary>From HomeTicker.Update: layout check, PLAY breathing, the pulsing ring and the pick pop.</summary>
         void Tick()
         {
-            float dt = Time.unscaledDeltaTime;
             Layout();
+            float t = Time.unscaledTime, dt = Time.unscaledDeltaTime;
 
-            if (snapT >= 0f && !dragging)
-            {
-                snapT += dt;
-                float k = Mathf.Clamp01(snapT / SnapTime);
-                pos = Mathf.LerpUnclamped(snapFrom, snapTo, EaseOutCubic(k));
-                if (k >= 1f) snapT = -1f;
-                UpdateRuler();
-            }
+            float breath = 1f + BreathAmp * (0.5f - 0.5f * Mathf.Cos(t * Mathf.PI * 2f / BreathPeriod));
+            playRoot.localScale = new Vector3(breath, breath, 1f);
+
+            float k = Mathf.Repeat(t, RingPeriod) / RingPeriod;
+            float rs = 1f + RingGrow * EaseOutCubic(k);
+            ring.localScale = new Vector3(rs, rs, 1f);
+            var c = Theme.Accent;
+            c.a = RingAlpha * (1f - k);
+            ringImg.color = c;
 
             if (popT >= 0f)
             {
                 popT += dt;
-                float k = Mathf.Clamp01(popT / PopTime);
-                float s = 1f + (PopScale - 1f) * Mathf.Sin(Mathf.PI * k); // 1 -> 1.12 -> 1
-                numberRt.localScale = new Vector3(s, s, 1f);
-                if (k >= 1f) popT = -1f;
+                float p = Mathf.Clamp01(popT / PopTime);
+                float s = 1f + (PopScale - 1f) * Mathf.Sin(Mathf.PI * p); // 1 -> 1.12 -> 1
+                slots[2].rt.localScale = new Vector3(s, s, 1f);
+                if (p >= 1f) popT = -1f;
             }
         }
 
@@ -509,94 +524,11 @@ namespace ArrowPuzzle
         }
     }
 
-    /// <summary>
-    /// The white HUD pill on Home: radius H / 2, a 3 px Theme.ListEdge bottom edge, and a row of [icon 22][count,
-    /// Bold 21] (callers may add more children to the row). Height H; the width follows the row, so the caller either
-    /// adds a horizontal ContentSizeFitter or puts the pill in a row that controls widths. (Moved here from the removed
-    /// ScreenMap.cs.)
-    /// </summary>
-    public static class HudPill
-    {
-        public const float H = 40f, Edge = 3f, IconD = 22f, CountD = 21f, Gap = 6f;
-
-        public static Image Make(Transform parent, string name, Icon icon, Color iconColor, float padLeftD, float padRightD, out Text count)
-        {
-            var pill = Ui.Img(parent, name, Theme.Rounded, Theme.Card, H * 0.5f);
-            pill.raycastTarget = false;
-            pill.rectTransform.sizeDelta = new Vector2(Theme.D(80f), Theme.D(H));
-            AddEdge(pill);
-            var row = Ui.Row(pill.rectTransform, Gap);
-            row.padding = new RectOffset(Mathf.RoundToInt(Theme.D(padLeftD)), Mathf.RoundToInt(Theme.D(padRightD)), 0, 0);
-            var ic = Icons.Make(pill.transform, icon, iconColor, IconD);
-            Ui.Size(ic, IconD, IconD);
-            count = Ui.Label(pill.transform, "0", CountD, Theme.Ink, Weight.Bold);
-            return pill;
-        }
-
-        /// <summary>The 3 px Theme.ListEdge edge under a white card.</summary>
-        public static void AddEdge(Graphic g)
-        {
-            var edge = g.gameObject.AddComponent<Shadow>();
-            edge.effectColor = Theme.ListEdge;
-            edge.effectDistance = new Vector2(0f, -Theme.D(Edge));
-            edge.useGraphicAlpha = false;
-        }
-    }
-
     /// <summary>Per-frame tick for ScreenHome (lives on the screen's Root, so it only runs while Home is shown).</summary>
     public class HomeTicker : MonoBehaviour
     {
         public Action tick;
 
         void Update() { if (tick != null) tick(); }
-    }
-
-    /// <summary>
-    /// Drag and tap on the Home ruler. Positions are in the ruler's own design px (its scale included), so the
-    /// content follows the finger exactly; a tap that turned into a drag is not a click.
-    /// </summary>
-    public class RulerInput : MonoBehaviour, IPointerDownHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler
-    {
-        public Action begin, end;
-        public Action<float> drag;
-        public Action<float, float> click;
-
-        float lastX;
-        bool dragged;
-
-        Vector2 Local(PointerEventData e)
-        {
-            Vector2 p;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)transform, e.position, e.pressEventCamera, out p);
-            return p / Theme.K;
-        }
-
-        public void OnPointerDown(PointerEventData e) { dragged = false; } // needed so this object gets the click
-
-        public void OnBeginDrag(PointerEventData e)
-        {
-            dragged = true;
-            lastX = Local(e).x;
-            if (begin != null) begin();
-        }
-
-        public void OnDrag(PointerEventData e)
-        {
-            float x = Local(e).x;
-            if (drag != null) drag(x - lastX);
-            lastX = x;
-        }
-
-        public void OnEndDrag(PointerEventData e)
-        {
-            if (end != null) end();
-        }
-
-        public void OnPointerClick(PointerEventData e)
-        {
-            if (dragged || e.dragging) return;
-            var p = Local(e);
-            if (click != null) click(p.x, p.y);
-        }
     }
 }
