@@ -288,7 +288,7 @@ namespace ArrowPuzzle
     /// </summary>
     public static class LongLevelGen
     {
-        public const int MaxTries = 60;      // seeds tried per level until the quality is in range
+        public const int MaxTries = 200;     // seeds tried per level until the quality is in range (a passing level stops at its first good seed)
         public const int MaxPathLen = 70;    // a 1-cell leftover is only merged into a path that stays under this
         public const int MaxCols = 31, MaxRows = 50;
         const double Fill = 0.94;            // the shape's bbox fills this much of the max grid at d = 1
@@ -309,6 +309,11 @@ namespace ArrowPuzzle
 
         /// <summary>Bounding box (x0, y0, x1, y1) of the shape, sampled every 0.004 over [-1.6, 1.6], padded by one step.</summary>
         public static double[] BBox(string shape)
+        {
+            lock (boxes) return BBoxLocked(shape); // the full-set build generates levels in parallel
+        }
+
+        static double[] BBoxLocked(string shape)
         {
             double[] b;
             if (boxes.TryGetValue(shape, out b)) return b;
@@ -336,15 +341,15 @@ namespace ArrowPuzzle
         }
 
         /// <summary>
-        /// Scale so the bbox fills Fill of the max grid (MaxCols x MaxRows) at d = 1, times lerp(0.45, 1, d); grid = bbox
-        /// rounded up + 1 cell margin per side (capped at the max, min 12 columns), bbox centred.
+        /// Scale so the bbox fills Fill of the max grid (MaxCols x MaxRows) at d = 1, times lerp(MinScale, 1, d); grid =
+        /// bbox rounded up + 1 cell margin per side (capped at the max, min MinCols columns), bbox centred.
         /// </summary>
         public static bool[] BuildMask(string shape, double d, out int cols, out int rows, out double boxFillPct, out bool clipped)
         {
             var b = BBox(shape);
             double bw = b[2] - b[0], bh = b[3] - b[1], cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
-            double sc = Math.Min(MaxCols * Fill / bw, MaxRows * Fill / bh) * Lerp(0.45, 1.0, d);
-            if (Math.Ceiling(bw * sc) + 2 < 12) sc = 9.999 / bw;
+            double sc = Math.Min(MaxCols * Fill / bw, MaxRows * Fill / bh) * Lerp(MinScale, 1.0, d);
+            if (Math.Ceiling(bw * sc) + 2 < MinCols) sc = (MinCols - 2 - 0.001) / bw;
             cols = Math.Min(MaxCols, (int)Math.Ceiling(bw * sc) + 2);
             rows = Math.Min(MaxRows, (int)Math.Ceiling(bh * sc) + 2);
             boxFillPct = 100.0 * (bw * sc) * (bh * sc) / (cols * rows);
@@ -358,13 +363,17 @@ namespace ArrowPuzzle
             if (dropped > 0)
             {
                 string key = shape + "@" + d.ToString(CultureInfo.InvariantCulture);
-                if (warned.Add(key)) Warn("Long levels: " + shape + " d=" + d.ToString(CultureInfo.InvariantCulture)
+                bool first;
+                lock (warned) first = warned.Add(key);
+                if (first) Warn("Long levels: " + shape + " d=" + d.ToString(CultureInfo.InvariantCulture)
                                           + ": dropped " + dropped + " cell(s) in groups under " + MinGroup + " cells");
             }
             return mask;
         }
 
         public const int MinGroup = 6; // isolated mask groups smaller than this are dropped
+        public const double MinScale = 0.3; // grid scale at d = 0 (of the d = 1 size): level 1 is a tiny board
+        public const int MinCols = 7;
 
         /// <summary>Where mask warnings go (Debug.LogWarning in the Editor; the console outside Unity).</summary>
         public static Action<string> Warn = s => Console.WriteLine("WARNING " + s);
@@ -1055,14 +1064,21 @@ namespace ArrowPuzzle
         /// </summary>
         public static string ToText(IList<LongLevel> levels)
         {
+            return ToText(levels, null, "# long samples (Arrow/Long Levels/Generate Samples).", "0.##");
+        }
+
+        /// <summary>numbers = level number per level (null: 1, 2, ...); header = first comment line; dFormat = d's format.</summary>
+        public static string ToText(IList<LongLevel> levels, IList<int> numbers, string header, string dFormat)
+        {
             var sb = new StringBuilder();
-            sb.Append("# long samples (Arrow/Long Levels/Generate Samples). L <n> <shape> <cols> <rows> <arrowCount> seed=<seed> d=<difficulty>; ")
+            sb.Append(header).Append(" L <n> <shape> <cols> <rows> <arrowCount> seed=<seed> d=<difficulty>; ")
               .Append("M = mask row (# is a board cell); A <colorIndex 0-7> <col,row ...> tail to head (last cell is the head)\n");
             for (int n = 0; n < levels.Count; n++)
             {
                 var l = levels[n];
-                sb.Append(string.Format(CultureInfo.InvariantCulture, "L {0} {1} {2} {3} {4} seed={5} d={6:0.##}\n",
-                    n + 1, l.Shape, l.Cols, l.Rows, l.Count, l.Seed, l.D));
+                sb.Append(string.Format(CultureInfo.InvariantCulture, "L {0} {1} {2} {3} {4} seed={5} d={6}\n",
+                    numbers != null ? numbers[n] : n + 1, l.Shape, l.Cols, l.Rows, l.Count, l.Seed,
+                    l.D.ToString(dFormat, CultureInfo.InvariantCulture)));
                 for (int r = 0; r < l.Rows; r++)
                 {
                     sb.Append("M ");
