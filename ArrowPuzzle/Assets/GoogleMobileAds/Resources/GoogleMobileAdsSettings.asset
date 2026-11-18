@@ -20,8 +20,8 @@ MonoBehaviour:
   disableOptimizeAdLoading: 0
   userTrackingUsageDescription: 
   userLanguage: en
-  overrideDefaultGmaAndroidSdk: 0
-  selectedGmaAndroidSdk: 0
+  overrideDefaultGmaAndroidSdk: 1
+  selectedGmaAndroidSdk: 1
   enableExternalDependencyManager: 1
   edmPackageDetected: 1
   addedEdmVersion: 2.1.0
