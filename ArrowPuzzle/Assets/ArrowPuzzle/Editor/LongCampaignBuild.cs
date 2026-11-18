@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-// Offline build of the whole long-arrow campaign (Campaign: 37 shapes x 12 levels). Editor only, no UnityEngine calls,
+// Offline build of the whole long-arrow campaign (Campaign: 333 levels, every 3rd a shape, the rest rectangle boards). Editor only, no UnityEngine calls,
 // so the .NET harness produces the same files. Menu: Arrow/Long Levels/Build Full Level Set (LongLevelEditorTools).
 namespace ArrowPuzzle
 {
@@ -67,12 +67,59 @@ namespace ArrowPuzzle
 
         public static int Seed(int level) { return level * 1000; } // + try (LongLevelGen.Generate)
 
+        // ------------------------------------------------------------------ normal boards (rectangles)
+
+        public const int NormalRowsMin = 11, NormalRowsMax = 46, NormalColsMin = 7;
+        public const double AspectMin = 0.6, AspectMax = 0.8;
+        public const int TinyCols = 8, TinyRows = 11, TinyMinArrows = 8, TinyMaxArrows = 12; // levels 1 and 2
+        public const double TinyLenD = 0.3; // levels 1 and 2: a few medium arrows so 88 cells make 8..12 arrows
+
+        /// <summary>Deterministic aspect cols / rows of a normal level, AspectMin..AspectMax (integer hash of the level).</summary>
+        public static double Aspect(int level)
+        {
+            unchecked
+            {
+                uint h = (uint)level * 2654435761u;
+                h ^= h >> 13;
+                h *= 2246822519u;
+                h ^= h >> 16;
+                return AspectMin + (AspectMax - AspectMin) * (h % 10001) / 10000.0;
+            }
+        }
+
+        /// <summary>
+        /// Size and extra rules of normal level `level` at difficulty d: rows = round(lerp(11, 46, d)), cols =
+        /// round(rows * Aspect) (at least 7, at most LongLevelGen.MaxCols). Levels 1 and 2: 8 x 11, 8..12 arrows.
+        /// </summary>
+        public static LongLevelGen.RectOptions NormalSize(int level, double d)
+        {
+            if (level <= 2)
+                return new LongLevelGen.RectOptions
+                {
+                    Cols = TinyCols, Rows = TinyRows, LenD = TinyLenD, MinArrows = TinyMinArrows, MaxArrows = TinyMaxArrows
+                };
+            int rows = (int)Math.Floor(NormalRowsMin + (NormalRowsMax - NormalRowsMin) * d + 0.5);
+            int cols = (int)Math.Floor(rows * Aspect(level) + 0.5);
+            cols = Math.Max(NormalColsMin, Math.Min(LongLevelGen.MaxCols, cols));
+            return new LongLevelGen.RectOptions { Cols = cols, Rows = rows };
+        }
+
+        /// <summary>One campaign level: a shape (Campaign.ShapeOfLevel) or a normal rectangle board.</summary>
+        public static LongLevel GenerateLevel(int level)
+        {
+            double d = D(level);
+            string shape = Campaign.ShapeOfLevel(level);
+            return shape != null ? LongLevelGen.Generate(shape, d, Seed(level))
+                                 : LongLevelGen.GenerateRect(NormalSize(level, d), d, Seed(level));
+        }
+
         // ------------------------------------------------------------------ build
 
         /// <summary>
         /// Generates all Campaign.TotalLevels levels (in parallel; each level only depends on its own seed), writes
-        /// long/&lt;shape&gt;.txt (12 levels each), long/index.txt and the summary. verify = the game's parser + peel test on
-        /// level text (ShapeLevels.VerifyText). progress is called on the calling thread.
+        /// long/shape_NAME.txt (its 3 rounds), long/normal_NN.txt (Campaign.NormalPack each), long/index.txt and the
+        /// summary. verify = the game's parser + peel test on level text (ShapeLevels.VerifyText). progress is called on
+        /// the calling thread.
         /// </summary>
         public static LongLevel[] Run(string projectRoot, Action<string, float> progress,
                                       Func<string, IDictionary<int, string>> verify, out string summary)
@@ -87,10 +134,12 @@ namespace ArrowPuzzle
 
             int n = Campaign.TotalLevels, done = 0;
             var levels = new LongLevel[n];
-            var task = Task.Run(() => Parallel.For(0, n, i =>
+            // biggest boards first, so the slow ones do not end up alone at the end
+            var order = new List<int>();
+            for (int g = n; g >= 1; g--) order.Add(g);
+            var task = Task.Run(() => Parallel.ForEach(order, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, g =>
             {
-                int g = i + 1;
-                levels[i] = LongLevelGen.Generate(Campaign.ShapeOf(g), D(g), Seed(g));
+                levels[g - 1] = GenerateLevel(g);
                 Interlocked.Increment(ref done);
             }));
             while (!task.Wait(250))
@@ -98,26 +147,39 @@ namespace ArrowPuzzle
             if (task.IsFaulted) throw task.Exception;
             long genMs = sw.ElapsedMilliseconds;
 
-            // files
+            // files: group the levels by Campaign.FileOf, in level order
             string dir = Path.Combine(projectRoot, OutDir);
             Directory.CreateDirectory(dir);
-            var all = new StringBuilder();
-            var index = new StringBuilder();
-            var ic = CultureInfo.InvariantCulture;
-            index.Append("# Campaign index (Arrow/Long Levels/Build Full Level Set): level shape file indexInFile arrowCount d\n");
-            for (int s = 0; s < Campaign.ShapeCount; s++)
+            var files = new SortedDictionary<string, List<int>>(StringComparer.Ordinal);
+            for (int g = 1; g <= n; g++)
             {
-                string shape = Campaign.Shapes[s];
+                string f = Campaign.FileOf(g);
+                List<int> list;
+                if (!files.TryGetValue(f, out list)) files[f] = list = new List<int>();
+                list.Add(g);
+            }
+            var all = new StringBuilder();
+            var ic = CultureInfo.InvariantCulture;
+            var where = new Dictionary<int, int>(); // level -> index in its file
+            foreach (var kv in files)
+            {
                 var list = new List<LongLevel>();
-                var nums = new List<int>();
-                foreach (int g in Campaign.LevelsOf(s)) { list.Add(levels[g - 1]); nums.Add(g); }
-                string text = LongLevelGen.ToText(list, nums, "# " + shape + ": campaign levels " + nums[0] + "-" + nums[nums.Count - 1]
+                foreach (int g in kv.Value) { where[g] = list.Count; list.Add(levels[g - 1]); }
+                string name = kv.Key.Substring(kv.Key.IndexOf('/') + 1);
+                string text = LongLevelGen.ToText(list, kv.Value, "# " + name + ": campaign levels " + string.Join(",", kv.Value.ConvertAll(x => x.ToString(ic)).ToArray())
                                                   + " (Arrow/Long Levels/Build Full Level Set).", "0.###");
-                File.WriteAllText(Path.Combine(dir, shape + ".txt"), text);
+                File.WriteAllText(Path.Combine(dir, name + ".txt"), text);
                 all.Append(text);
-                for (int k = 0; k < list.Count; k++)
-                    index.Append(nums[k]).Append(' ').Append(shape).Append(" long/").Append(shape).Append(' ').Append(k).Append(' ')
-                         .Append(list[k].Count).Append(' ').Append(list[k].D.ToString("0.###", ic)).Append('\n');
+            }
+            var index = new StringBuilder();
+            index.Append("# Campaign index (Arrow/Long Levels/Build Full Level Set): level kind file indexInFile shape cols rows arrowCount d\n");
+            for (int g = 1; g <= n; g++)
+            {
+                var l = levels[g - 1];
+                string shape = Campaign.ShapeOfLevel(g);
+                index.Append(g).Append(' ').Append(shape != null ? "shape" : "normal").Append(' ').Append(Campaign.FileOf(g)).Append(' ')
+                     .Append(where[g]).Append(' ').Append(shape ?? "-").Append(' ').Append(l.Cols).Append(' ').Append(l.Rows).Append(' ')
+                     .Append(l.Count).Append(' ').Append(l.D.ToString("0.###", ic)).Append('\n');
             }
             File.WriteAllText(Path.Combine(dir, Campaign.IndexFile + ".txt"), index.ToString());
 

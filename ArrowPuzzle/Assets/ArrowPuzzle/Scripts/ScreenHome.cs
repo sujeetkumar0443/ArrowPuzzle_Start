@@ -5,8 +5,8 @@ using UnityEngine.UI;
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// Home ("Home with shape preview"): Settings and the coin pill on top; a hero card with the current level's shape
-    /// drawn in the current theme (LevelPreview of thumbs.txt) and two chips (shape progress -> Shapes, theme -> Themes);
+    /// Home ("Home with shape preview"): Settings and the coin pill on top; a hero card with the current level's real board
+    /// drawn in the current theme (LevelPreview of Levels.For) and two chips (shape name or BOARD -> Shapes, theme -> Themes);
     /// the five-slot level ruler; PLAY (breathing); three Panel tiles: SKIPS n/total (+2 by rewarded ad when none are
     /// left), THEMES, SHAPES. The hero card takes the height that is left, so everything fits above the banner.
     /// Dev route (Editor / Development Build): hold the coin pill 1 s, or tap it 7 times in 3 s.
@@ -62,6 +62,7 @@ namespace ArrowPuzzle
         readonly Slot[] slots = new Slot[5];
         GameObject preview;
         string previewKey;
+        Vector2 previewSize; // design px, set by Layout
         ScreenKit.Toast toast;
         bool skipWaiting;
         int skipRequest;
@@ -377,9 +378,7 @@ namespace ArrowPuzzle
             SetSelected(Save.UnlockedGlobal);
             SetCoins();
             SetSkips();
-            int shape = Campaign.ShapeIndexOf(Save.UnlockedGlobal);
-            shapeChipText.text = Campaign.Title(Campaign.Shapes[shape]).ToUpperInvariant() + "  "
-                                 + Campaign.ShapeProgress(shape) + "/" + Campaign.LevelsPerShape;
+            SetTypeChip();
             themeChipText.text = ((Theme.Current != null ? Theme.Current.Name : "Cream") + " theme").ToUpperInvariant();
         }
 
@@ -466,6 +465,20 @@ namespace ArrowPuzzle
 
             SetStep(prevGroup, selected > 1);
             SetStep(nextGroup, selected < unlocked);
+
+            // the hero card follows the level PLAY starts: its type chip and its board
+            if (shapeChipText != null)
+            {
+                SetTypeChip();
+                LayoutChips();
+            }
+            if (previewSize.x > 0f) DrawPreview(previewSize);
+        }
+
+        /// <summary>Left chip: the shape name in capitals for a shape level, "BOARD" for a normal one.</summary>
+        void SetTypeChip()
+        {
+            shapeChipText.text = Campaign.TypeTitle(selected).ToUpperInvariant();
         }
 
         static void SetStep(CanvasGroup g, bool on)
@@ -552,6 +565,7 @@ namespace ArrowPuzzle
             float previewH = cardH - PreviewPad - ChipInset - ChipH - 10f;
             var size = new Vector2(CardW - PreviewPad * 2f, Mathf.Max(60f, previewH - PreviewPad));
             Ui.PlaceD(previewHolder, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -PreviewPad), size);
+            previewSize = size;
             DrawPreview(size);
         }
 
@@ -564,16 +578,33 @@ namespace ArrowPuzzle
             Ui.PlaceD(themeChip.rectTransform, Ui.BR, new Vector2(1f, 0f), new Vector2(-ChipInset, ChipInset), new Vector2(tw, ChipH));
         }
 
-        /// <summary>The current level's shape (thumbs.txt) in the current theme, as large as fits; redrawn only on a change.</summary>
+        /// <summary>
+        /// The current level's real board (the level PLAY starts: the shape for a shape level, the rectangle of arrows for a
+        /// normal one) in the current theme, as large as fits; redrawn only on a change.
+        /// </summary>
         void DrawPreview(Vector2 sizeD)
         {
-            int shape = Campaign.ShapeIndexOf(Save.UnlockedGlobal);
+            int level = selected;
             var theme = Theme.Current ?? Themes.Get(Themes.Default);
-            string key = shape + "|" + theme.Id + "|" + Mathf.RoundToInt(sizeD.x) + "x" + Mathf.RoundToInt(sizeD.y);
+            string key = level + "|" + theme.Id + "|" + Mathf.RoundToInt(sizeD.x) + "x" + Mathf.RoundToInt(sizeD.y);
             if (key == previewKey && preview != null) return;
             if (preview != null) Destroy(preview);
-            preview = LevelPreview.Create(previewHolder, Campaign.Thumb(shape), theme, sizeD, false).gameObject;
+            preview = LevelPreview.Create(previewHolder, HeroLevel(level), theme, sizeD, false).gameObject;
             previewKey = key;
+        }
+
+        // the last parsed hero level (Levels.For parses one level; its file text is cached there too)
+        static int heroLevel;
+        static LevelData heroData;
+
+        static LevelData HeroLevel(int level)
+        {
+            if (heroData == null || heroLevel != level)
+            {
+                heroData = Levels.For(level);
+                heroLevel = level;
+            }
+            return heroData;
         }
 
         /// <summary>The backdrop covers the whole canvas (Root is the safe area), like the splash's background.</summary>

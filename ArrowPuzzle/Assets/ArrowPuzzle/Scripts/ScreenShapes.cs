@@ -6,9 +6,10 @@ namespace ArrowPuzzle
 {
     /// <summary>
     /// SHAPES gallery: header (back, title, live coin pill), subtitle, a scrolling 3-column grid of the 37 campaign shapes
-    /// and a dark NEXT SHAPE panel under it. Cards: COMPLETE (green check) / current shape (teal ring, progress bar, n/12) /
-    /// reached (n/12) / locked (faded preview, lock badge, "Level N"). Thumbnails come from thumbs.txt, are created as cards
-    /// scroll into view and freed on hide. Tap: unlocked = play its first level without stars; locked = toast.
+    /// and a dark NEXT SHAPE panel under it. Cards: COMPLETE (green check, its round-0 level done) / Next (the next shape
+    /// level coming: teal ring, "Level N") / locked (faded preview, lock badge, grey "Level N"). Thumbnails come from
+    /// thumbs.txt, are created as cards scroll into view and freed on hide. Tap: unlocked = play its round-0 level
+    /// (Campaign.FirstLevel, a replay once done); locked = toast.
     /// Open with ScreenShapes.Open(); back returns to the screen that opened it.
     /// </summary>
     public class ScreenShapes : AppScreen
@@ -54,21 +55,22 @@ namespace ArrowPuzzle
         {
             foreach (var c in cards) if (c.slot != null) Object.Destroy(c.slot.gameObject);
             cards.Clear();
-            int current = Campaign.ShapeIndexOf(Save.UnlockedGlobal);
-            for (int i = 0; i < Campaign.ShapeCount; i++) cards.Add(BuildCard(i, current));
+            // the next shape coming = the first one whose round-0 level is not completed yet
+            int next = -1;
+            for (int i = 0; i < Campaign.ShapeCount && next < 0; i++) if (!Campaign.ShapeDone(i)) next = i;
+            for (int i = 0; i < Campaign.ShapeCount; i++) cards.Add(BuildCard(i, next));
         }
 
-        Card BuildCard(int i, int current)
+        Card BuildCard(int i, int next)
         {
             var c = new Card { shape = i };
             c.slot = Ui.New(content, "Shape_" + Campaign.Shapes[i]);
             bool unlocked = Campaign.IsShapeUnlocked(i);
-            int done = Campaign.ShapeProgress(i);
-            bool complete = done >= Campaign.LevelsPerShape;
-            bool isCurrent = unlocked && i == current && !complete;
+            bool complete = Campaign.ShapeDone(i);
+            bool isNext = i == next && !complete;
             c.locked = !unlocked;
 
-            if (isCurrent) ScreenKit.Ring(c.slot, Teal, CardR, RingW);
+            if (isNext) ScreenKit.Ring(c.slot, Teal, CardR, RingW);
             var card = ScreenKit.Card(c.slot, CardR, EdgeD);
             var crt = card.rectTransform;
             int shape = i;
@@ -91,12 +93,7 @@ namespace ArrowPuzzle
             Ui.PlaceD(name.rectTransform, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -nameY), new Vector2(CardW - 8f, 22f));
 
             float stateY = nameY + 24f;
-            if (c.locked)
-            {
-                var l = Ui.Label(crt, "Level " + Campaign.FirstLevel(i), 14f, Theme.LockedLevelIcon, Weight.Semi);
-                Ui.PlaceD(l.rectTransform, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -stateY), new Vector2(CardW - 8f, 20f));
-            }
-            else if (complete)
+            if (complete)
             {
                 var row = Ui.New(crt, "Complete");
                 Ui.PlaceD(row, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -stateY), new Vector2(CardW - 8f, 20f));
@@ -106,25 +103,11 @@ namespace ArrowPuzzle
                 le.preferredWidth = le.preferredHeight = Theme.D(16f);
                 Ui.Label(row, "COMPLETE", 13f, Theme.Success, Weight.Bold);
             }
-            else if (isCurrent)
-            {
-                float barW = 52f;
-                var track = ScreenKit.Rounded(crt, "Track", Theme.RulerTrack, BarH * 0.5f);
-                track.raycastTarget = false;
-                Ui.PlaceD(track.rectTransform, Ui.TL, new Vector2(0f, 0.5f), new Vector2(12f, -(stateY + 10f)), new Vector2(barW, BarH));
-                float k = done / (float)Campaign.LevelsPerShape;
-                if (k > 0f)
-                {
-                    var fill = ScreenKit.Rounded(track.rectTransform, "Fill", Teal, BarH * 0.5f);
-                    fill.raycastTarget = false;
-                    Ui.PlaceD(fill.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(Mathf.Max(BarH, barW * k), BarH));
-                }
-                var l = Ui.Label(crt, done + "/" + Campaign.LevelsPerShape, 14f, Theme.Ink, Weight.Bold, TextAnchor.MiddleRight);
-                Ui.PlaceD(l.rectTransform, Ui.TR, new Vector2(1f, 0.5f), new Vector2(-10f, -(stateY + 10f)), new Vector2(40f, 20f));
-            }
             else
             {
-                var l = Ui.Label(crt, done + "/" + Campaign.LevelsPerShape, 14f, Theme.InkSoft, Weight.Semi);
+                // Next: teal ring, "Level N" in Ink; locked: grey; reached but not done (a skip): InkSoft
+                Color col = isNext ? Theme.Ink : c.locked ? Theme.LockedLevelIcon : Theme.InkSoft;
+                var l = Ui.Label(crt, "Level " + Campaign.FirstLevel(i), 14f, col, isNext ? Weight.Bold : Weight.Semi);
                 Ui.PlaceD(l.rectTransform, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -stateY), new Vector2(CardW - 8f, 20f));
             }
             return c;
@@ -162,8 +145,7 @@ namespace ArrowPuzzle
         void RefreshPanel()
         {
             int unlocked = Save.UnlockedGlobal;
-            int cur = Campaign.ShapeIndexOf(unlocked);
-            int next = cur + 1;
+            int next = Campaign.NextShape(unlocked); // the next shape not yet reached
             float trackW = 390f - ScreenKit.Side * 2f - 32f;
             float k;
             if (next >= Campaign.ShapeCount)
@@ -175,11 +157,12 @@ namespace ArrowPuzzle
             }
             else
             {
-                int first = Campaign.FirstLevel(next), from = Campaign.FirstLevel(cur);
+                // bar: from the previous shape level (or level 0) to this shape's level
+                int first = Campaign.FirstLevel(next), from = next > 0 ? Campaign.FirstLevel(next - 1) : 0;
                 int left = Mathf.Max(0, first - unlocked);
                 panelTitle.text = "NEXT SHAPE: " + Campaign.Title(Campaign.Shapes[next]).ToUpperInvariant();
                 panelLevel.text = "Level " + unlocked + " / " + first;
-                panelHint.text = left + (left == 1 ? " more level to unlock" : " more levels to unlock");
+                panelHint.text = left + (left == 1 ? " more level" : " more levels");
                 k = (unlocked - from) / (float)(first - from);
             }
             panelFill.anchorMin = panelFill.anchorMax = panelFill.pivot = new Vector2(0f, 0.5f);
@@ -219,10 +202,7 @@ namespace ArrowPuzzle
                 toast.Show("Reach level " + Campaign.FirstLevel(shape) + " to unlock", ScreenKit.BottomD() + PanelH + PanelGap + 14f);
                 return;
             }
-            int unlocked = Save.UnlockedGlobal, start = Campaign.FirstLevel(shape);
-            foreach (int g in Campaign.LevelsOf(shape))
-                if (g <= unlocked && !Save.IsCompleted(g)) { start = g; break; }
-            GameApp.I.CurrentLevel = start; // same start as PLAY / the ruler
+            GameApp.I.CurrentLevel = Campaign.FirstLevel(shape); // its round-0 level (a replay once it is done)
             GameApp.I.Show("ScreenGame");
         }
 

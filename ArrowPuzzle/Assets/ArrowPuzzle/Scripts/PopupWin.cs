@@ -446,7 +446,7 @@ namespace ArrowPuzzle
             // medium first: normal layout, or the compact step at which the medium ad fits under the button row
             ApplyLayout(mrec.Plan());
             earned = Mathf.Clamp(GameApp.I.ResultLives, 1, 3); // the stars ScreenGame.OnWon saved
-            AnalyticsService.LevelComplete(GameApp.I.CurrentLevel, Campaign.ShapeOf(GameApp.I.CurrentLevel), earned,
+            AnalyticsService.LevelComplete(GameApp.I.CurrentLevel, Campaign.TypeKey(GameApp.I.CurrentLevel), earned,
                                            GameApp.I.ResultTime, GameApp.I.ResultNewBest);
             SetCoins(GameApp.I.BonusMult); // set by PopupBonusSpin: 0 = No thanks
 

@@ -1,7 +1,7 @@
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// The one path of levels: the long-arrow campaign (Campaign: 37 shapes x 12 levels = 444). Global level g is the
+    /// The one path of levels: the long-arrow campaign (Campaign: 333 levels, every 3rd a shape). Global level g is the
     /// campaign level g; its shape, arrow count and difficulty come from Campaign / index.txt (no level is parsed).
     /// The old Classic / Shapes / Mosaic cycle (150 levels) is kept only for the one-time save migration and the music
     /// rotation (Old*, Music*).
@@ -13,10 +13,10 @@ namespace ArrowPuzzle
         /// <summary>"Hard" above this many arrows (analytics label).</summary>
         public const int EasyMaxArrows = 35;
 
-        /// <summary>Display name of the level's shape, e.g. "Heart".</summary>
+        /// <summary>Display type of the level: its shape ("Heart") or "Board" for a normal level.</summary>
         public static string TypeName(int g)
         {
-            return Campaign.ShapeTitle(g);
+            return Campaign.TypeTitle(g);
         }
 
         /// <summary>"Easy" (at most EasyMaxArrows arrows) or "Hard", from index.txt.</summary>

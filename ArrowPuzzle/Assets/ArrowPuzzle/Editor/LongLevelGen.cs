@@ -485,35 +485,94 @@ namespace ArrowPuzzle
         /// <summary>Tries seeds baseSeed, baseSeed + 1, ... (max MaxTries) until the quality is in range; else the best one.</summary>
         public static LongLevel Generate(string shape, double d, int baseSeed)
         {
+            return Run(shape, d, baseSeed, null);
+        }
+
+        /// <summary>Name written for rectangle boards (normal levels): the whole grid is the mask.</summary>
+        public const string BoardShape = "board";
+
+        /// <summary>Extra rules for rectangle boards (normal levels).</summary>
+        public sealed class RectOptions
+        {
+            public int Cols, Rows;
+            public double LenD = -1;        // arrow length mix (TargetLen) from this d instead of the level's d; -1 = d
+            public double MaxDropPct = 1;   // at most this % of the cells dropped by Cleanup
+            public int MinArrows, MaxArrows; // 0 = no limit
+            public int MaxTries = 400;      // full grids pass the free-share gate less often than shapes
+            public int EdgeWin = 20;        // cut search window for arrow ends on the border pointing out (free heads)
+        }
+
+        /// <summary>
+        /// A rectangle board cols x rows (every cell is a board cell), same snakes / cuts / head search / gates as the
+        /// shapes, plus RectOptions (dropped cells, arrow count). Seeds baseSeed, baseSeed + 1, ... like Generate.
+        /// </summary>
+        public static LongLevel GenerateRect(RectOptions o, double d, int baseSeed)
+        {
+            return Run(BoardShape, d, baseSeed, o);
+        }
+
+        static bool GoodRect(LongLevel l, RectOptions o)
+        {
+            if (o == null) return true;
+            if (100.0 * l.Dropped / (l.Cols * l.Rows) > o.MaxDropPct) return false;
+            if (o.MinArrows > 0 && l.Count < o.MinArrows) return false;
+            if (o.MaxArrows > 0 && l.Count > o.MaxArrows) return false;
+            return true;
+        }
+
+        static double PenaltyRect(LongLevel l, RectOptions o)
+        {
+            if (o == null) return 0;
+            double p = Math.Max(0, 100.0 * l.Dropped / (l.Cols * l.Rows) - o.MaxDropPct) * 10;
+            if (o.MinArrows > 0 && l.Count < o.MinArrows) p += 3 * (o.MinArrows - l.Count);
+            if (o.MaxArrows > 0 && l.Count > o.MaxArrows) p += 3 * (l.Count - o.MaxArrows);
+            return p;
+        }
+
+        static LongLevel Run(string shape, double d, int baseSeed, RectOptions o)
+        {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             LongLevel best = null;
             double bestP = double.MaxValue;
             int tries = 0;
-            for (int t = 0; t < MaxTries; t++)
+            int maxTries = o != null ? o.MaxTries : MaxTries;
+            for (int t = 0; t < maxTries; t++)
             {
                 tries++;
-                var l = TryOnce(shape, d, baseSeed + t);
-                if (Good(l)) { best = l; break; }
-                double p = Penalty(l);
+                var l = TryOnce(shape, d, baseSeed + t, o);
+                if (Good(l) && GoodRect(l, o)) { best = l; break; }
+                double p = Penalty(l) + PenaltyRect(l, o);
                 if (p < bestP) { bestP = p; best = l; }
             }
             best.BaseSeed = baseSeed;
             best.Tries = tries;
-            best.InRange = Good(best);
+            best.InRange = Good(best) && GoodRect(best, o);
             best.Ms = sw.Elapsed.TotalMilliseconds;
             return best;
         }
 
-        static LongLevel TryOnce(string shape, double d, int seed)
+        static LongLevel TryOnce(string shape, double d, int seed, RectOptions o)
         {
             var rng = new Random(seed);
             int cols, rows;
             double fill;
             bool clipped;
-            var mask = BuildMask(shape, d, out cols, out rows, out fill, out clipped);
-            var snakes = Snakes(mask, cols, rows, rng);
+            bool[] mask;
+            if (o != null)
+            {
+                cols = o.Cols;
+                rows = o.Rows;
+                mask = new bool[cols * rows];
+                for (int i = 0; i < mask.Length; i++) mask[i] = true;
+                fill = 100;
+                clipped = false;
+            }
+            else mask = BuildMask(shape, d, out cols, out rows, out fill, out clipped);
+            double lenD = o != null && o.LenD >= 0 ? o.LenD : d;
             var paths = new List<List<int>>();
-            foreach (var s in snakes) Cut(s, d, cols, rng, paths);
+            var snakes = Snakes(mask, cols, rows, rng);
+            int edgeWin = o != null ? o.EdgeWin : 0;
+            foreach (var s in snakes) Cut(s, lenD, cols, rows, edgeWin, rng, paths);
             int dropped = Cleanup(paths, mask, cols, rows);
 
             var lvl = new LongLevel
@@ -532,6 +591,7 @@ namespace ArrowPuzzle
                 lvl.Colors.Add(rng.Next(8));
             }
             Stats(lvl);
+            if (o != null) EdgeFlips(lvl, rng);
             return lvl;
         }
 
@@ -628,6 +688,15 @@ namespace ArrowPuzzle
         /// <summary>Cuts a snake into arrows of sampled lengths; a leftover under 2 cells stays on the previous piece.</summary>
         static void Cut(List<int> s, double d, int cols, Random rng, List<List<int>> outPaths)
         {
+            Cut(s, d, cols, 0, 0, rng, outPaths);
+        }
+
+        /// <summary>
+        /// edgeWin &gt; 0 (rectangle boards): a cut within edgeWin cells of the sampled one that leaves an arrow end on the
+        /// border pointing out of the grid (that end can be a free head) is taken first.
+        /// </summary>
+        static void Cut(List<int> s, double d, int cols, int rows, int edgeWin, Random rng, List<List<int>> outPaths)
+        {
             int pos = 0, n = s.Count;
             while (pos < n)
             {
@@ -639,7 +708,14 @@ namespace ArrowPuzzle
                     break;
                 }
                 int k = pos + len, lo = pos + 2, hi = n - 2;
-                if (RunLen(s, k, cols) < 3)
+                int edgeK = -1;
+                for (int off = 0; off <= edgeWin && edgeK < 0; off++)
+                {
+                    if (k - off >= lo && EdgeCut(s, k - off, cols, rows)) edgeK = k - off;
+                    else if (off > 0 && k + off <= hi && EdgeCut(s, k + off, cols, rows)) edgeK = k + off;
+                }
+                if (edgeK >= 0) k = edgeK;
+                else if (RunLen(s, k, cols) < 3)
                 {
                     // a better cut (not inside a straight run under 3 cells) within 2 cells, nearest first
                     for (int off = 1; off <= 2; off++)
@@ -651,6 +727,20 @@ namespace ArrowPuzzle
                 outPaths.Add(s.GetRange(pos, k - pos));
                 pos = k;
             }
+        }
+
+        /// <summary>A cut before s[k] leaves s[k-1] (coming from s[k-2]) or s[k] (left towards s[k+1]) pointing out of the grid.</summary>
+        static bool EdgeCut(List<int> s, int k, int cols, int rows)
+        {
+            if (k >= 2 && OutEnd(s[k - 2], s[k - 1], cols, rows)) return true;
+            return k + 1 < s.Count && OutEnd(s[k + 1], s[k], cols, rows);
+        }
+
+        /// <summary>One more step from b in the direction a -&gt; b leaves the grid.</summary>
+        static bool OutEnd(int a, int b, int cols, int rows)
+        {
+            int c = b % cols + (b % cols - a % cols), r = b / cols + (b / cols - a / cols);
+            return c < 0 || r < 0 || c >= cols || r >= rows;
         }
 
         /// <summary>
@@ -989,6 +1079,86 @@ namespace ArrowPuzzle
         /// Re-checks a finished level from its arrows only (cover, neighbours, the game's peel rule) and fills
         /// Solvable, FreeAtStart, FreeCount, Depth (simultaneous rounds until the board is empty).
         /// </summary>
+        /// <summary>
+        /// Rectangle boards: in a full grid only an arrow whose head sits on the border pointing out is free at the start,
+        /// so the head search alone leaves too few free arrows. Arrows whose TAIL is such a border cell (the step from its
+        /// neighbour points out of the grid) get their head moved there, in random order, until the free share reaches
+        /// MinFreePct + 3. Safe for solvability: a free arrow can always go first, and the rest peel as before.
+        /// </summary>
+        static void EdgeFlips(LongLevel l, Random rng)
+        {
+            double target = MinFreePct(l.D);
+            if (target <= 0 || !l.Solvable || l.FreePct >= target + 3) return;
+            int cols = l.Cols, rows = l.Rows;
+            var cand = new List<int>();
+            for (int i = 0; i < l.Count; i++)
+            {
+                var a = l.Arrows[i];
+                if (l.FreeAtStart[i] || a.Count < 2) continue;
+                int t = a[0], q = a[1];
+                int c = t % cols + (t % cols - q % cols), r = t / cols + (t / cols - q / cols);
+                if (c < 0 || r < 0 || c >= cols || r >= rows) cand.Add(i);
+            }
+            for (int i = cand.Count - 1; i > 0; i--) { int j = rng.Next(i + 1); int tmp = cand[i]; cand[i] = cand[j]; cand[j] = tmp; }
+            int need = (int)Math.Ceiling((target + 3) * l.Count / 100.0) - l.FreeCount;
+            for (int k = 0; k < cand.Count && k < need; k++) l.Arrows[cand[k]].Reverse();
+            if (need > 0 && cand.Count > 0) Stats(l);
+
+            // still short: split an arrow at a border cell a[j] where it meets the border head-on, so one part gets a free
+            // head there (each part keeps at least 3 cells):
+            //  - arriving (a[j-1] -> a[j] points out): front a[0..j] heads out at a[j]; the back keeps the old head and ray,
+            //    so the old peel order still works with the front part first (always safe);
+            //  - leaving (a[j+1] -> a[j] points out): the back a[j..] is reversed to head out at a[j]; the front a[0..j-1]
+            //    gets a new head, so this one is kept only if the peel test and the depth gate still pass.
+            var tried = new HashSet<long>();
+            for (int guard = 0; guard < 60 && l.FreePct < target + 3; guard++)
+            {
+                var moves = new List<long>(); // (arrow * 4096 + j) * 2 + kind
+                for (int i = 0; i < l.Count; i++)
+                {
+                    if (l.FreeAtStart[i]) continue;
+                    var a = l.Arrows[i];
+                    for (int j = 2; j + 3 < a.Count; j++)
+                    {
+                        long key = ((long)i * 4096 + j) * 2;
+                        if (OutEnd(a[j - 1], a[j], cols, rows) && !tried.Contains(key)) moves.Add(key);
+                        if (j >= 3 && OutEnd(a[j + 1], a[j], cols, rows) && !tried.Contains(key + 1)) moves.Add(key + 1);
+                    }
+                }
+                if (moves.Count == 0) break;
+                long mv = moves[rng.Next(moves.Count)];
+                tried.Add(mv);
+                int kind = (int)(mv % 2), ai = (int)(mv / 2 / 4096), sj = (int)(mv / 2 % 4096);
+                var arrow = l.Arrows[ai];
+                var saved = new List<int>(arrow);
+                List<int> extra;
+                if (kind == 0)
+                {
+                    extra = arrow.GetRange(0, sj + 1);
+                    arrow.RemoveRange(0, sj + 1);
+                }
+                else
+                {
+                    extra = arrow.GetRange(sj, arrow.Count - sj);
+                    extra.Reverse();
+                    arrow.RemoveRange(sj, arrow.Count - sj);
+                }
+                l.Arrows.Add(extra);
+                l.Colors.Add(rng.Next(8));
+                int freeBefore = l.FreeCount;
+                Stats(l);
+                if (kind == 1 && (!l.Solvable || l.Depth < MinDepth(l.D) || l.FreeCount <= freeBefore))
+                {
+                    l.Arrows.RemoveAt(l.Arrows.Count - 1);
+                    l.Colors.RemoveAt(l.Colors.Count - 1);
+                    arrow.Clear();
+                    arrow.AddRange(saved);
+                    Stats(l);
+                }
+                else tried.Clear(); // indices moved: start the candidate list over
+            }
+        }
+
         public static void Stats(LongLevel l)
         {
             int cols = l.Cols, rows = l.Rows, n = l.Count;

@@ -50,23 +50,25 @@ namespace ArrowPuzzle
             else Debug.LogError(report);
         }
 
-        /// <summary>Every campaign file through the game's parser + peel test, plus the index (arrow counts, all levels present).</summary>
+        /// <summary>Every campaign file through the game's parser + peel test, plus the index (file, size, arrow counts, all levels present).</summary>
         [MenuItem("Arrow/Long Levels/Verify Full Level Set")]
         static void VerifyFullSet()
         {
-            string dir = Path.Combine(Path.GetDirectoryName(Application.dataPath), LongCampaignBuild.OutDir);
+            string dir = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Assets/ArrowPuzzle/Resources/Levels");
             var arrows = new System.Collections.Generic.Dictionary<int, int>();
             var problems = new StringBuilder();
             int pass = 0, seen = 0;
-            foreach (var shape in Campaign.Shapes)
+            var files = new System.Collections.Generic.SortedSet<string>();
+            for (int g = 1; g <= Campaign.TotalLevels; g++) files.Add(Campaign.FileOf(g));
+            foreach (var name in files)
             {
-                string file = Path.Combine(dir, shape + ".txt");
+                string file = Path.Combine(dir, name + ".txt");
                 if (!File.Exists(file)) { problems.Append("\n  missing ").Append(file); continue; }
                 string text = File.ReadAllText(file);
                 foreach (var kv in ShapeLevels.VerifyText(text))
                 {
                     seen++;
-                    if (Campaign.ShapeOf(kv.Key) != shape) problems.Append("\n  level ").Append(kv.Key).Append(" is in ").Append(shape).Append(".txt");
+                    if (Campaign.FileOf(kv.Key) != name) problems.Append("\n  level ").Append(kv.Key).Append(" is in ").Append(name).Append(".txt");
                     if (kv.Value == null) pass++;
                     else problems.Append("\n  level ").Append(kv.Key).Append(": ").Append(kv.Value);
                 }
@@ -78,17 +80,19 @@ namespace ArrowPuzzle
                 }
             }
             int indexed = 0;
-            string indexFile = Path.Combine(dir, Campaign.IndexFile + ".txt");
+            string indexFile = Path.Combine(dir, Campaign.Folder.Substring("Levels/".Length), Campaign.IndexFile + ".txt");
             if (!File.Exists(indexFile)) problems.Append("\n  missing index.txt");
             else
                 foreach (var line in File.ReadAllLines(indexFile))
                 {
                     var p = line.Trim().Split(' ');
                     int g, n;
-                    if (p.Length < 6 || line.StartsWith("#") || !int.TryParse(p[0], out g) || !int.TryParse(p[4], out n)) continue;
+                    if (p.Length < 9 || line.StartsWith("#") || !int.TryParse(p[0], out g) || !int.TryParse(p[7], out n)) continue;
                     indexed++;
                     int real;
-                    if (!arrows.TryGetValue(g, out real) || real != n || p[1] != Campaign.ShapeOf(g))
+                    string kind = Campaign.IsShape(g) ? "shape" : "normal";
+                    if (!arrows.TryGetValue(g, out real) || real != n || p[1] != kind || p[2] != Campaign.FileOf(g)
+                        || p[4] != (Campaign.ShapeOfLevel(g) ?? "-"))
                         problems.Append("\n  index line for level ").Append(g).Append(" does not match its file");
                 }
             bool ok = pass == Campaign.TotalLevels && seen == Campaign.TotalLevels && indexed == Campaign.TotalLevels && problems.Length == 0;

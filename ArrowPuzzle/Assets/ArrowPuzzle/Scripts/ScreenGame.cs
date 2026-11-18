@@ -634,7 +634,7 @@ namespace ArrowPuzzle
             else data = Levels.For(g);
             if (data == null)
             {
-                Debug.LogError("[ArrowPuzzle] No level " + g + " (" + Campaign.ShapeOf(g) + ")");
+                Debug.LogError("[ArrowPuzzle] No level " + g + " (" + Campaign.TypeKey(g) + ")");
                 return;
             }
             mode = type;
@@ -660,9 +660,9 @@ namespace ArrowPuzzle
             Ads.Banner(true, "ScreenGame"); // every level start (first, Restart, Next): this screen wants it
             bannerLayoutPending = false;
             ApplyBannerLayout(); // buttons and board area above the banner's current height
-            if (!sample) AnalyticsService.LevelStart(level, Campaign.ShapeOf(level), LevelPath.Difficulty(level));
+            if (!sample) AnalyticsService.LevelStart(level, Campaign.TypeKey(level), LevelPath.Difficulty(level));
             CrashReporter.SetKey("level", level.ToString());
-            CrashReporter.SetKey("type", sample ? "sample" : Campaign.ShapeOf(level));
+            CrashReporter.SetKey("type", sample ? "sample" : Campaign.TypeKey(level));
             MrecSlot.Preload(MrecKind.Bonus); // the MRECs of the popups that can open from here (no-op when loading /
             MrecSlot.Preload(MrecKind.Lose);  // loaded at the same place); Level complete's loads while the wheel spins
 

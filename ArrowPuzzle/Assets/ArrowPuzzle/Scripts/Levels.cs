@@ -8,14 +8,14 @@ namespace ArrowPuzzle
         static string cachedFile, cachedText;
 
         /// <summary>
-        /// Campaign level g (1..Campaign.TotalLevels): its shape's file Resources/Levels/long/&lt;shape&gt;.txt is loaded on
+        /// Campaign level g (1..Campaign.TotalLevels): its file (Campaign.FileOf: long/shape_NAME or long/normal_NN) is loaded on
         /// demand (the last file's text is cached), only level g is parsed, and it is flagged for the long-arrow renderer.
         /// Null (with an error log) if the file or the level is missing.
         /// </summary>
         public static LevelData For(int g)
         {
             g = Mathf.Clamp(g, 1, Campaign.TotalLevels);
-            string file = Campaign.Folder + "/" + Campaign.ShapeOf(g);
+            string file = "Levels/" + Campaign.FileOf(g);
             if (file != cachedFile)
             {
                 var ta = Resources.Load<TextAsset>(file);

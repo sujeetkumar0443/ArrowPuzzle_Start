@@ -19,13 +19,13 @@ namespace ArrowPuzzle
             for (int g = 1; g <= LevelPath.Count; g++)
             {
                 var data = Levels.For(g);
-                bool ok = data != null && data.pieces.Count > 0 && data.number == g && data.shape == Campaign.ShapeOf(g)
+                bool ok = data != null && data.pieces.Count > 0 && data.number == g && data.shape == (Campaign.ShapeOfLevel(g) ?? LongLevelGen.BoardShape)
                           && data.pieces.Count == Campaign.ArrowCount(g);
                 if (!ok) failed++;
                 string difficulty = LevelPath.Difficulty(g);
                 if (difficulty == "Hard") hard++;
-                list.Append("\n  ").Append(g).Append(" -> ").Append(Campaign.ShapeOf(g)).Append(' ')
-                    .Append(Campaign.IndexInShape(g) + 1).Append("/").Append(Campaign.LevelsPerShape).Append(", d ")
+                list.Append("\n  ").Append(g).Append(" -> ").Append(Campaign.TypeTitle(g))
+                    .Append(Campaign.IsShape(g) ? " round " + (Campaign.RoundOf(g) + 1) : "").Append(", d ")
                     .Append(Campaign.Difficulty(g).ToString("0.###")).Append(", ").Append(difficulty);
                 if (data != null) list.Append(", ").Append(data.pieces.Count).Append(" arrows");
                 if (!ok) list.Append("  FAILED");
@@ -36,7 +36,7 @@ namespace ArrowPuzzle
             else Debug.LogError(head + ", " + failed + " FAILED" + list);
         }
 
-        static readonly int[] SanityLevels = { 1, 2, 5, 10, 12, 13, 50, 100, 200, 444 };
+        static readonly int[] SanityLevels = { 1, 2, 3, 4, 6, 9, 30, 100, 200, 333 };
 
         [MenuItem("Arrow/Long Levels/Sanity Check Campaign Levels")]
         static void Sanity()
