@@ -835,7 +835,6 @@ namespace ArrowPuzzle
 
         void OnBumped()
         {
-            if (Board.IsLong) return; // long levels: no full-screen flash / shake (light haptic + ring on the board)
             if (flashFx != null) GameApp.I.StopCoroutine(flashFx);
             flashFx = GameApp.I.StartCoroutine(Flash());
             if (shakeFx != null) GameApp.I.StopCoroutine(shakeFx);
