@@ -113,14 +113,14 @@ namespace ArrowPuzzle
     public sealed class LongLevel
     {
         public string Shape;
-        public double D;
-        public int BaseSeed, Seed, Tries, Cols, Rows, Splits, Dropped;
+        public double D, BoxFillPct;
+        public int BaseSeed, Seed, Tries, Cols, Rows, Splits, Dropped, Snakes;
         public bool[] Mask;                                        // r * Cols + c
         public readonly List<List<int>> Arrows = new List<List<int>>(); // tail -> head, cell indices
         public readonly List<int> Colors = new List<int>();
         public bool[] FreeAtStart;
         public int FreeCount, Depth;
-        public bool Solvable, InRange;
+        public bool Solvable, InRange, Clipped;
         public double Ms;
 
         public int Count { get { return Arrows.Count; } }
@@ -128,53 +128,105 @@ namespace ArrowPuzzle
         public int MaxLen { get { int m = 0; foreach (var a in Arrows) m = Math.Max(m, a.Count); return m; } }
         public double AvgLen { get { if (Count == 0) return 0; double s = 0; foreach (var a in Arrows) s += a.Count; return s / Count; } }
         public int MaskCells { get { int n = 0; foreach (bool b in Mask) if (b) n++; return n; } }
+
+        /// <summary>% of the arrow cells that belong to arrows of at least minLen cells.</summary>
+        public double LongCellPct(int minLen)
+        {
+            int all = 0, lng = 0;
+            foreach (var a in Arrows) { all += a.Count; if (a.Count >= minLen) lng += a.Count; }
+            return all == 0 ? 0 : 100.0 * lng / all;
+        }
     }
 
     /// <summary>
-    /// Path tiling (greedy random walks), head choice and repair so the in-game peel test passes, quality retry loop.
+    /// Long snakes over the shape, cut into arrows, head choice by local search (annealing) and splits at cycle
+    /// crossings so the in-game peel test passes, then a quality retry loop.
     /// Blocking rule = the game's: the ray from the head straight to the GRID edge (mask ignored); any arrow cell on it,
     /// the arrow's own body included, blocks.
     /// </summary>
     public static class LongLevelGen
     {
-        public const int MaxTries = 30;      // seeds tried per level until the quality is in range
+        public const int MaxTries = 60;      // seeds tried per level until the quality is in range
         public const int MaxPathLen = 70;    // a 1-cell leftover is only merged into a path that stays under this
-        const int Restarts = 8;              // random restarts of the head flips before a stuck path is split
-        const int MaxSplits = 400;
+        public const int MaxCols = 31, MaxRows = 50;
+        const double Fill = 0.94;            // the shape's bbox fills this much of the max grid at d = 1
+        const int SearchSteps = 2000;
+        const int SearchRestarts = 3;        // extra annealing runs before a path is split
+        const int MaxSplits = 60;
+        const int LongArrow = 25;            // "long arrow" for the stats
 
         static readonly int[] DC = { 0, 1, 0, -1 };
         static readonly int[] DR = { -1, 0, 1, 0 };
 
-        // ------------------------------------------------------------------ grid and mask
-
         static int RoundHalfUp(double v) { return (int)Math.Floor(v + 0.5); }
         static double Lerp(double a, double b, double t) { return a + (b - a) * t; }
 
-        public static void GridFor(double d, out int cols, out int rows)
+        // ------------------------------------------------------------------ shape fit and mask
+
+        static readonly Dictionary<string, double[]> boxes = new Dictionary<string, double[]>();
+
+        /// <summary>Bounding box (x0, y0, x1, y1) of the shape, sampled every 0.004 over [-1.6, 1.6], padded by one step.</summary>
+        public static double[] BBox(string shape)
         {
-            rows = RoundHalfUp(Lerp(18, 50, d));
-            cols = RoundHalfUp(rows * 0.62);
+            double[] b;
+            if (boxes.TryGetValue(shape, out b)) return b;
+            const double lim = 1.6, step = 0.004;
+            int n = (int)(2 * lim / step);
+            double x0 = double.MaxValue, y0 = double.MaxValue, x1 = double.MinValue, y1 = double.MinValue;
+            for (int j = 0; j <= n; j++)
+            {
+                double y = -lim + j * step;
+                for (int i = 0; i <= n; i++)
+                {
+                    double x = -lim + i * step;
+                    if (!LongShapes.Inside(shape, x, y)) continue;
+                    if (x < x0) x0 = x;
+                    if (x > x1) x1 = x;
+                    if (y < y0) y0 = y;
+                    if (y > y1) y1 = y;
+                }
+            }
+            if (x0 <= -lim + step || y0 <= -lim + step || x1 >= lim - step || y1 >= lim - step)
+                throw new InvalidOperationException("Shape " + shape + " reaches the sampling limit");
+            b = new[] { x0 - step, y0 - step, x1 + step, y1 + step };
+            boxes[shape] = b;
+            return b;
         }
 
-        public static bool[] BuildMask(string shape, double d, out int cols, out int rows)
+        /// <summary>
+        /// Scale so the bbox fills Fill of the max grid (MaxCols x MaxRows) at d = 1, times lerp(0.45, 1, d); grid = bbox
+        /// rounded up + 1 cell margin per side (capped at the max, min 12 columns), bbox centred.
+        /// </summary>
+        public static bool[] BuildMask(string shape, double d, out int cols, out int rows, out double boxFillPct, out bool clipped)
         {
-            GridFor(d, out cols, out rows);
-            double sc = LongShapes.Scale(shape) / 11.0 * rows / 50.0;
+            var b = BBox(shape);
+            double bw = b[2] - b[0], bh = b[3] - b[1], cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
+            double sc = Math.Min(MaxCols * Fill / bw, MaxRows * Fill / bh) * Lerp(0.45, 1.0, d);
+            if (Math.Ceiling(bw * sc) + 2 < 12) sc = 9.999 / bw;
+            cols = Math.Min(MaxCols, (int)Math.Ceiling(bw * sc) + 2);
+            rows = Math.Min(MaxRows, (int)Math.Ceiling(bh * sc) + 2);
+            boxFillPct = 100.0 * (bw * sc) * (bh * sc) / (cols * rows);
+            clipped = bw * sc > cols || bh * sc > rows;
+
             var mask = new bool[cols * rows];
             for (int r = 0; r < rows; r++)
                 for (int c = 0; c < cols; c++)
-                    mask[r * cols + c] = LongShapes.Inside(shape, (c + 0.5 - cols / 2.0) / sc, (r + 0.5 - rows / 2.0) / sc);
+                    mask[r * cols + c] = LongShapes.Inside(shape, cx + (c + 0.5 - cols / 2.0) / sc, cy + (r + 0.5 - rows / 2.0) / sc);
             return mask;
         }
 
-        /// <summary>Quality target: free-at-start % and peel depth (simultaneous rounds).</summary>
-        public static int MinDepth(double d) { return RoundHalfUp(Lerp(3, 8, d)); }
+        // ------------------------------------------------------------------ quality gates
+
+        public static int MinDepth(double d) { return RoundHalfUp(3 + 5 * d); }
         public static double MinFreePct(double d) { return d >= 0.5 ? 12 : 0; }
         public static double MaxFreePct(double d) { return d >= 0.5 ? 40 : 60; }
+        public static double MinAvgLen(double d) { return d >= 0.5 ? Lerp(8, 15, (d - 0.5) / 0.5) : 0; }
+        public static int MaxSplitsGate(double d) { return d >= 0.5 ? 3 : 99; }
 
         static bool Good(LongLevel l)
         {
-            return l.Solvable && l.FreePct >= MinFreePct(l.D) && l.FreePct <= MaxFreePct(l.D) && l.Depth >= MinDepth(l.D);
+            return l.Solvable && l.FreePct >= MinFreePct(l.D) && l.FreePct <= MaxFreePct(l.D) && l.Depth >= MinDepth(l.D)
+                   && l.AvgLen >= MinAvgLen(l.D) && l.Splits <= MaxSplitsGate(l.D);
         }
 
         static double Penalty(LongLevel l)
@@ -184,6 +236,8 @@ namespace ArrowPuzzle
             if (l.FreePct < MinFreePct(l.D)) p += MinFreePct(l.D) - l.FreePct;
             if (l.FreePct > MaxFreePct(l.D)) p += l.FreePct - MaxFreePct(l.D);
             if (l.Depth < MinDepth(l.D)) p += 5 * (MinDepth(l.D) - l.Depth);
+            if (l.AvgLen < MinAvgLen(l.D)) p += 5 * (MinAvgLen(l.D) - l.AvgLen);
+            if (l.Splits > MaxSplitsGate(l.D)) p += 2 * (l.Splits - MaxSplitsGate(l.D));
             return p;
         }
 
@@ -215,18 +269,26 @@ namespace ArrowPuzzle
         {
             var rng = new Random(seed);
             int cols, rows;
-            var mask = BuildMask(shape, d, out cols, out rows);
-            var paths = Tile(mask, cols, rows, d, rng);
+            double fill;
+            bool clipped;
+            var mask = BuildMask(shape, d, out cols, out rows, out fill, out clipped);
+            var snakes = Snakes(mask, cols, rows, rng);
+            var paths = new List<List<int>>();
+            foreach (var s in snakes) Cut(s, d, cols, rng, paths);
             int dropped = Cleanup(paths, mask, cols, rows);
 
-            var lvl = new LongLevel { Shape = shape, D = d, Seed = seed, Cols = cols, Rows = rows, Mask = mask, Dropped = dropped };
-            var s = new Solver(paths, cols, rows, rng);
-            lvl.Solvable = s.Solve();
-            lvl.Splits = s.splits;
-            for (int i = 0; i < s.paths.Count; i++)
+            var lvl = new LongLevel
             {
-                var a = new List<int>(s.paths[i]);
-                if (s.pick[i] == 1) a.Reverse();
+                Shape = shape, D = d, Seed = seed, Cols = cols, Rows = rows, Mask = mask, Dropped = dropped,
+                Snakes = snakes.Count, BoxFillPct = fill, Clipped = clipped
+            };
+            var sv = new Solver(paths, cols, rows, rng);
+            lvl.Solvable = sv.Solve();
+            lvl.Splits = sv.splits;
+            for (int i = 0; i < sv.paths.Count; i++)
+            {
+                var a = new List<int>(sv.paths[i]);
+                if (sv.pick[i] == 1) a.Reverse();
                 lvl.Arrows.Add(a);
                 lvl.Colors.Add(rng.Next(8));
             }
@@ -234,7 +296,7 @@ namespace ArrowPuzzle
             return lvl;
         }
 
-        // ------------------------------------------------------------------ tiling
+        // ------------------------------------------------------------------ snakes and cuts
 
         static int Step(int cell, int k, int cols, int rows)
         {
@@ -253,42 +315,34 @@ namespace ArrowPuzzle
             return n;
         }
 
-        static int TargetLen(double d, Random rng)
-        {
-            double pS = Lerp(0.9, 0.34, d), pM = Lerp(0.1, 0.42, d);
-            double u = rng.NextDouble();
-            if (u < pS) return rng.Next(3, 9);
-            if (u < pS + pM) return rng.Next(9, 23);
-            return rng.Next(23, 61);
-        }
-
-        static List<List<int>> Tile(bool[] mask, int cols, int rows, double d, Random rng)
+        /// <summary>Random walks until stuck (score = free neighbours + noise 0..1.4, -0.9 straight on), each from a free cell with the fewest free neighbours.</summary>
+        static List<List<int>> Snakes(bool[] mask, int cols, int rows, Random rng)
         {
             int n = cols * rows;
             var free = (bool[])mask.Clone();
             int freeCount = 0;
             foreach (bool b in mask) if (b) freeCount++;
-            var paths = new List<List<int>>();
-            var buckets = new List<int>[5];
-            for (int i = 0; i < 5; i++) buckets[i] = new List<int>();
-            var picks = new List<int>(6);
+            var snakes = new List<List<int>>();
+            var ties = new List<int>();
 
             while (freeCount > 0)
             {
-                // the 6 free cells with the fewest free neighbours (scan order inside a count), random pick among them
-                foreach (var b in buckets) b.Clear();
-                for (int i = 0; i < n; i++) if (free[i]) buckets[FreeNbrs(free, i, cols, rows)].Add(i);
-                picks.Clear();
-                foreach (var b in buckets)
-                    for (int j = 0; j < b.Count && picks.Count < 6; j++) picks.Add(b[j]);
-                int start = picks[rng.Next(picks.Count)];
+                ties.Clear();
+                int min = int.MaxValue;
+                for (int i = 0; i < n; i++)
+                {
+                    if (!free[i]) continue;
+                    int f = FreeNbrs(free, i, cols, rows);
+                    if (f < min) { min = f; ties.Clear(); }
+                    if (f == min) ties.Add(i);
+                }
+                int start = ties[rng.Next(ties.Count)];
 
                 var path = new List<int> { start };
                 free[start] = false;
                 freeCount--;
-                int target = TargetLen(d, rng);
                 int lastDir = -1;
-                while (path.Count < target)
+                while (true)
                 {
                     int cur = path[path.Count - 1], best = -1, bestDir = -1;
                     double bestScore = double.MaxValue;
@@ -305,9 +359,59 @@ namespace ArrowPuzzle
                     freeCount--;
                     lastDir = bestDir;
                 }
-                paths.Add(path);
+                snakes.Add(path);
             }
-            return paths;
+            return snakes;
+        }
+
+        /// <summary>Short 3-8 / medium 9-22 / long 23-60, mix by d: 0 -> 90/10/0, 0.5 -> 45/40/15, 1 -> 15/35/50.</summary>
+        static int TargetLen(double d, Random rng)
+        {
+            double pS, pM;
+            if (d <= 0.5) { pS = Lerp(0.90, 0.45, d / 0.5); pM = Lerp(0.10, 0.40, d / 0.5); }
+            else { pS = Lerp(0.45, 0.15, (d - 0.5) / 0.5); pM = Lerp(0.40, 0.35, (d - 0.5) / 0.5); }
+            double u = rng.NextDouble();
+            if (u < pS) return rng.Next(3, 9);
+            if (u < pS + pM) return rng.Next(9, 23);
+            return rng.Next(23, 61);
+        }
+
+        /// <summary>Cells in the straight run that contains the step s[j-1] -> s[j].</summary>
+        static int RunLen(List<int> s, int j, int cols)
+        {
+            int dv = s[j] - s[j - 1];
+            int a = j - 1, b = j;
+            while (a - 1 >= 0 && s[a] - s[a - 1] == dv) a--;
+            while (b + 1 < s.Count && s[b + 1] - s[b] == dv) b++;
+            return b - a + 1;
+        }
+
+        /// <summary>Cuts a snake into arrows of sampled lengths; a leftover under 2 cells stays on the previous piece.</summary>
+        static void Cut(List<int> s, double d, int cols, Random rng, List<List<int>> outPaths)
+        {
+            int pos = 0, n = s.Count;
+            while (pos < n)
+            {
+                int rem = n - pos;
+                int len = TargetLen(d, rng);
+                if (rem - len < 2)
+                {
+                    outPaths.Add(s.GetRange(pos, rem)); // 1-cell snakes are handled by Cleanup
+                    break;
+                }
+                int k = pos + len, lo = pos + 2, hi = n - 2;
+                if (RunLen(s, k, cols) < 3)
+                {
+                    // a better cut (not inside a straight run under 3 cells) within 2 cells, nearest first
+                    for (int off = 1; off <= 2; off++)
+                    {
+                        if (k - off >= lo && RunLen(s, k - off, cols) >= 3) { k -= off; break; }
+                        if (k + off <= hi && RunLen(s, k + off, cols) >= 3) { k += off; break; }
+                    }
+                }
+                outPaths.Add(s.GetRange(pos, k - pos));
+                pos = k;
+            }
         }
 
         /// <summary>
@@ -360,16 +464,23 @@ namespace ArrowPuzzle
 
         // ------------------------------------------------------------------ heads and solvability
 
-        /// <summary>Peel graph of the current head choice: i is blocked by every other arrow on its head ray.</summary>
+        /// <summary>
+        /// Head choice per path (0 = head is the last cell, 1 = the first). Greedy start (end with fewer blockers), then
+        /// simulated annealing over head flips of stuck arrows; if it fails, split one path where a dependency cycle
+        /// crosses it and search again.
+        /// </summary>
         sealed class Solver
         {
             public readonly List<List<int>> paths;
-            public readonly List<int> pick = new List<int>();          // 0 = head is the last cell, 1 = the first
+            public readonly List<int> pick = new List<int>();
             public int splits;
             readonly int cols, rows;
             readonly Random rng;
-            readonly List<List<int>[]> blk = new List<List<int>[]>(); // [i][option] distinct other arrows on the ray
-            readonly List<bool[]> self = new List<bool[]>();           // [i][option] own body on the ray
+            // per path and option: distinct other arrows on the head ray, the first cell of each on the ray,
+            // and the first own cell on the ray (-1 = none, the option is usable)
+            readonly List<List<int>[]> blk = new List<List<int>[]>();
+            readonly List<List<int>[]> hit = new List<List<int>[]>();
+            readonly List<int[]> selfCell = new List<int[]>();
             int[] owner;
 
             public Solver(List<List<int>> paths, int cols, int rows, Random rng)
@@ -380,67 +491,180 @@ namespace ArrowPuzzle
                 this.rng = rng;
             }
 
+            bool Self(int i, int o) { return selfCell[i][o] >= 0; }
+
             public bool Solve()
             {
                 Rebuild();
                 for (int i = 0; i < paths.Count; i++) pick.Add(InitialPick(i));
 
-                for (int guard = 0; guard <= MaxSplits; guard++)
+                while (true)
                 {
-                    // a path that blocks itself from both ends can never leave: split it first
-                    bool split = false;
-                    for (int i = 0; i < paths.Count; i++)
-                        if (self[i][0] && self[i][1] && paths[i].Count >= 4) { Split(i); split = true; }
-                    if (split) { Rebuild(); continue; }
+                    // a path that blocks itself from both ends can never leave: split it at its own crossing
+                    int dead = -1;
+                    for (int i = 0; i < paths.Count && dead < 0; i++)
+                        if (Self(i, 0) && Self(i, 1) && paths[i].Count >= 4) dead = i;
+                    if (dead >= 0)
+                    {
+                        if (splits >= MaxSplits) return false;
+                        Split(dead, paths[dead].IndexOf(selfCell[dead][pick[dead]]));
+                        continue;
+                    }
 
-                    if (Repair()) return true;
+                    // search, then up to SearchRestarts restarts with random heads on the stuck arrows, before any split
+                    bool solved = Search();
+                    for (int r = 0; r < SearchRestarts && !solved; r++)
+                    {
+                        var stuck = new List<int>();
+                        Peel(stuck);
+                        foreach (int i in stuck)
+                        {
+                            int o = rng.Next(2);
+                            if (!Self(i, o)) pick[i] = o;
+                        }
+                        solved = Search();
+                    }
+                    if (solved) return true;
+                    if (splits >= MaxSplits) return false;
 
-                    var stuck = new List<int>();
-                    Peel(stuck);
-                    var cand = stuck.FindAll(i => paths[i].Count >= 4);
-                    if (cand.Count == 0) return false;
-                    Split(cand[rng.Next(cand.Count)]);
-                    Rebuild();
+                    int w, at;
+                    if (!FindCycleSplit(out w, out at)) return false;
+                    Split(w, at);
                 }
-                return false;
             }
 
             int InitialPick(int i)
             {
-                int b0 = self[i][0] ? int.MaxValue : blk[i][0].Count;
-                int b1 = self[i][1] ? int.MaxValue : blk[i][1].Count;
+                int b0 = Self(i, 0) ? int.MaxValue : blk[i][0].Count;
+                int b1 = Self(i, 1) ? int.MaxValue : blk[i][1].Count;
                 return b1 < b0 ? 1 : 0;
             }
 
-            /// <summary>Head flips on stuck arrows, then random restarts of the stuck heads.</summary>
-            bool Repair()
+            /// <summary>Simulated annealing on cost = 50 x stuck + total blockers; keeps the best state seen.</summary>
+            bool Search()
             {
                 var stuck = new List<int>();
-                int iters = Math.Max(100, 2 * paths.Count);
-                for (int restart = 0; restart <= Restarts; restart++)
+                Peel(stuck);
+                if (stuck.Count == 0) return true;
+
+                int total = 0;
+                for (int i = 0; i < paths.Count; i++) total += blk[i][pick[i]].Count;
+                double cost = 50.0 * stuck.Count + total, bestCost = cost;
+                var best = new List<int>(pick);
+                var stuckSet = new bool[paths.Count];
+                double temp = 20;
+
+                for (int step = 0; step < SearchSteps; step++)
                 {
-                    for (int it = 0; it < iters; it++)
+                    // candidate: a stuck arrow whose other end is usable; half the time the one with most stuck blockers
+                    foreach (int i in stuck) stuckSet[i] = true;
+                    int cand = -1;
+                    if (rng.NextDouble() < 0.5)
                     {
-                        Peel(stuck);
+                        int most = -1;
+                        foreach (int i in stuck)
+                        {
+                            if (Self(i, 1 - pick[i])) continue;
+                            int m = 0;
+                            foreach (int w in blk[i][pick[i]]) if (stuckSet[w]) m++;
+                            if (m > most) { most = m; cand = i; }
+                        }
+                    }
+                    else
+                    {
+                        for (int t = 0; t < 8 && cand < 0; t++)
+                        {
+                            int i = stuck[rng.Next(stuck.Count)];
+                            if (!Self(i, 1 - pick[i])) cand = i;
+                        }
+                    }
+                    foreach (int i in stuck) stuckSet[i] = false;
+                    if (cand < 0) break;
+
+                    int oldTotal = total;
+                    total += blk[cand][1 - pick[cand]].Count - blk[cand][pick[cand]].Count;
+                    pick[cand] = 1 - pick[cand];
+                    var next = new List<int>();
+                    Peel(next);
+                    double c2 = 50.0 * next.Count + total;
+                    if (c2 <= cost || rng.NextDouble() < Math.Exp((cost - c2) / temp))
+                    {
+                        cost = c2;
+                        stuck = next;
+                        if (cost < bestCost) { bestCost = cost; best = new List<int>(pick); }
                         if (stuck.Count == 0) return true;
-                        int i = stuck[rng.Next(stuck.Count)];
-                        if (!self[i][1 - pick[i]]) pick[i] = 1 - pick[i];
                     }
-                    foreach (int i in stuck)
+                    else
                     {
-                        int o = rng.Next(2);
-                        if (!self[i][o]) pick[i] = o;
+                        pick[cand] = 1 - pick[cand];
+                        total = oldTotal;
                     }
+                    temp = Math.Max(0.5, temp * 0.997);
                 }
+                for (int i = 0; i < pick.Count; i++) pick[i] = best[i];
                 Peel(stuck);
                 return stuck.Count == 0;
             }
 
-            /// <summary>Path i -> its first k cells (stays at i) + the rest (appended); both parts at least 2 cells.</summary>
-            void Split(int i)
+            /// <summary>
+            /// Follows stuck arrows to a stuck blocker until one repeats (a dependency cycle). Splits the longest cycle
+            /// member w at the first cell of w on the ray of the arrow it blocks.
+            /// </summary>
+            bool FindCycleSplit(out int w, out int at)
+            {
+                w = -1; at = -1;
+                var stuck = new List<int>();
+                Peel(stuck);
+                if (stuck.Count == 0) return false;
+                var isStuck = new bool[paths.Count];
+                foreach (int i in stuck) isStuck[i] = true;
+
+                // start from the stuck arrow with the most stuck blockers
+                int cur = stuck[0], most = -1;
+                foreach (int i in stuck)
+                {
+                    int m = 0;
+                    foreach (int b in blk[i][pick[i]]) if (isStuck[b]) m++;
+                    if (m > most) { most = m; cur = i; }
+                }
+
+                var order = new List<int>();
+                var seenAt = new Dictionary<int, int>();
+                while (!seenAt.ContainsKey(cur))
+                {
+                    seenAt[cur] = order.Count;
+                    order.Add(cur);
+                    if (Self(cur, pick[cur])) { w = cur; at = paths[cur].IndexOf(selfCell[cur][pick[cur]]); return paths[cur].Count >= 4; }
+                    int nxt = -1;
+                    foreach (int b in blk[cur][pick[cur]]) if (isStuck[b]) { nxt = b; break; }
+                    if (nxt < 0) return false; // cannot happen: a stuck arrow always has a stuck blocker
+                    cur = nxt;
+                }
+
+                // cycle = order[seenAt[cur]..], edge order[j] -> order[j + 1] means order[j] is blocked by order[j + 1]
+                int startIdx = seenAt[cur], bestLen = 3;
+                for (int j = startIdx; j < order.Count; j++)
+                {
+                    int i = order[j], b = j + 1 < order.Count ? order[j + 1] : cur;
+                    if (paths[b].Count <= bestLen) continue;
+                    var bl = blk[i][pick[i]];
+                    int cell = hit[i][pick[i]][bl.IndexOf(b)];
+                    bestLen = paths[b].Count;
+                    w = b;
+                    at = paths[b].IndexOf(cell);
+                }
+                return w >= 0;
+            }
+
+            /// <summary>
+            /// Path i -> two pieces cut next to cell index at (pieces >= 6 cells where possible, always >= 2). The first
+            /// piece stays at i, the second is appended; both get the greedy head.
+            /// </summary>
+            void Split(int i, int at)
             {
                 var p = paths[i];
-                int k = rng.Next(2, p.Count - 1);
+                int min = p.Count >= 12 ? 6 : 2;
+                int k = Math.Max(min, Math.Min(p.Count - min, at));
                 paths[i] = p.GetRange(0, k);
                 paths.Add(p.GetRange(k, p.Count - k));
                 splits++;
@@ -455,35 +679,40 @@ namespace ArrowPuzzle
                 for (int i = 0; i < owner.Length; i++) owner[i] = -1;
                 for (int i = 0; i < paths.Count; i++) foreach (int c in paths[i]) owner[c] = i;
                 blk.Clear();
-                self.Clear();
+                hit.Clear();
+                selfCell.Clear();
                 for (int i = 0; i < paths.Count; i++)
                 {
                     var b = new[] { new List<int>(), new List<int>() };
-                    var s = new bool[2];
-                    for (int o = 0; o < 2; o++) Ray(i, o, b[o], out s[o]);
+                    var h = new[] { new List<int>(), new List<int>() };
+                    var s = new int[2];
+                    for (int o = 0; o < 2; o++) s[o] = Ray(i, o, b[o], h[o]);
                     blk.Add(b);
-                    self.Add(s);
+                    hit.Add(h);
+                    selfCell.Add(s);
                 }
             }
 
-            void Ray(int i, int option, List<int> blockers, out bool selfBlocked)
+            /// <summary>Fills the distinct blockers on the head ray of option o (and their first cells); returns the first own cell or -1.</summary>
+            int Ray(int i, int option, List<int> blockers, List<int> cells)
             {
                 var p = paths[i];
                 int head = option == 0 ? p[p.Count - 1] : p[0];
                 int prev = option == 0 ? p[p.Count - 2] : p[1];
                 int dc = head % cols - prev % cols, dr = head / cols - prev / cols;
-                selfBlocked = false;
+                int self = -1;
                 for (int c = head % cols + dc, r = head / cols + dr; c >= 0 && r >= 0 && c < cols && r < rows; c += dc, r += dr)
                 {
-                    int w = owner[r * cols + c];
+                    int cell = r * cols + c, w = owner[cell];
                     if (w < 0) continue;
-                    if (w == i) selfBlocked = true;
-                    else if (!blockers.Contains(w)) blockers.Add(w);
+                    if (w == i) { if (self < 0) self = cell; }
+                    else if (!blockers.Contains(w)) { blockers.Add(w); cells.Add(cell); }
                 }
+                return self;
             }
 
-            /// <summary>Simultaneous peel rounds. Fills stuck; returns depth (rounds) and the round-1 count.</summary>
-            public int Peel(List<int> stuck, bool[] freeFirst = null)
+            /// <summary>Simultaneous peel rounds on the current heads. Fills stuck; returns the depth.</summary>
+            int Peel(List<int> stuck)
             {
                 int n = paths.Count;
                 var indeg = new int[n];
@@ -491,20 +720,19 @@ namespace ArrowPuzzle
                 for (int i = 0; i < n; i++) rev[i] = new List<int>();
                 for (int i = 0; i < n; i++)
                 {
-                    indeg[i] = self[i][pick[i]] ? int.MaxValue / 2 : blk[i][pick[i]].Count;
+                    indeg[i] = Self(i, pick[i]) ? int.MaxValue / 2 : blk[i][pick[i]].Count;
                     foreach (int w in blk[i][pick[i]]) rev[w].Add(i);
                 }
                 var cur = new List<int>();
                 var next = new List<int>();
                 for (int i = 0; i < n; i++) if (indeg[i] == 0) cur.Add(i);
-                if (freeFirst != null) foreach (int i in cur) freeFirst[i] = true;
-                int removed = 0, depth = 0;
+                int depth = 0;
                 var gone = new bool[n];
                 while (cur.Count > 0)
                 {
                     depth++;
                     next.Clear();
-                    foreach (int w in cur) { gone[w] = true; removed++; }
+                    foreach (int w in cur) gone[w] = true;
                     foreach (int w in cur)
                         foreach (int i in rev[w])
                             if (--indeg[i] == 0) next.Add(i);
@@ -579,12 +807,14 @@ namespace ArrowPuzzle
         public static string StatLine(LongLevel l)
         {
             return string.Format(CultureInfo.InvariantCulture,
-                "{0} d={1:0.##} grid {2}x{3} ({4} cells, {5} dropped) | arrows {6}, avg len {7:0.0}, max {8} | free at start {9:0.0}% " +
-                "(target {10:0}-{11:0}%) | depth {12} (min {13}) | {14} | seed {15} (base {16}, try {17}/{18}), splits {19} | {20:0} ms",
-                l.Shape, l.D, l.Cols, l.Rows, l.MaskCells, l.Dropped, l.Count, l.AvgLen, l.MaxLen, l.FreePct,
+                "{0} d={1:0.##} grid {2}x{3} ({4} cells, {5} dropped, bbox fill {6:0}%{7}) | arrows {8}, avg len {9:0.0} (min {10:0.#}), " +
+                "max {11}, cells in 25+ arrows {12:0}% | free at start {13:0.0}% (target {14:0}-{15:0}%) | depth {16} (min {17}) | {18} | " +
+                "seed {19} (base {20}, try {21}/{22}), splits {23} (max {25}) | {24:0} ms",
+                l.Shape, l.D, l.Cols, l.Rows, l.MaskCells, l.Dropped, l.BoxFillPct, l.Clipped ? ", CLIPPED" : "",
+                l.Count, l.AvgLen, MinAvgLen(l.D), l.MaxLen, l.LongCellPct(LongArrow), l.FreePct,
                 MinFreePct(l.D), MaxFreePct(l.D), l.Depth, MinDepth(l.D),
                 !l.Solvable ? "NOT SOLVABLE" : l.InRange ? "in range" : "OUT OF RANGE",
-                l.Seed, l.BaseSeed, l.Tries, MaxTries, l.Splits, l.Ms);
+                l.Seed, l.BaseSeed, l.Tries, MaxTries, l.Splits, l.Ms, MaxSplitsGate(l.D));
         }
 
         // ------------------------------------------------------------------ level file (shapes.txt format)
@@ -632,6 +862,8 @@ namespace ArrowPuzzle
             new Sample { Shape = "paw", D = 1.0, Seed = 3001 },
             new Sample { Shape = "star", D = 1.0, Seed = 4001 },
             new Sample { Shape = "cat", D = 1.0, Seed = 5001 },
+            new Sample { Shape = "fish", D = 1.0, Seed = 6001 },
+            new Sample { Shape = "heart", D = 1.0, Seed = 7001 },
         };
 
         public const string LevelFile = "Assets/ArrowPuzzle/Resources/Levels/long_samples.txt"; // next to shapes.txt
@@ -652,6 +884,7 @@ namespace ArrowPuzzle
 
             string dir = Path.Combine(projectRoot, PreviewDir);
             Directory.CreateDirectory(dir);
+            foreach (var old in Directory.GetFiles(dir)) File.Delete(old); // no stale previews from an older sample list
             var summary = new StringBuilder();
             for (int i = 0; i < levels.Count; i++)
             {
