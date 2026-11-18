@@ -841,7 +841,32 @@ namespace ArrowPuzzle
             foreach (var p in pieces)
                 if (!p.removed && !p.moving && !p.busy && Check(p) == State.Free) free.Add(p);
             if (free.Count == 0) return false;
-            var pick = free[UnityEngine.Random.Range(0, free.Count)];
+
+            // the free arrow that blocks the most other arrows (it is on their head rays), so tapping it frees the most;
+            // ties -> random
+            var blocks = new int[pieces.Count];
+            var seen = new List<int>();
+            foreach (var q in pieces)
+            {
+                if (q.removed || q.moving) continue;
+                seen.Clear();
+                for (var c = q.d.Head + q.d.dir; InGrid(c.x, c.y); c += q.d.dir)
+                {
+                    int w = owner[c.x, c.y];
+                    if (w < 0 || w == q.index || seen.Contains(w)) continue;
+                    seen.Add(w);
+                    blocks[w]++;
+                }
+            }
+            int best = -1;
+            var top = new List<Piece>();
+            foreach (var p in free)
+            {
+                int b = blocks[p.index];
+                if (b > best) { best = b; top.Clear(); }
+                if (b == best) top.Add(p);
+            }
+            var pick = top[UnityEngine.Random.Range(0, top.Count)];
             hintFx = StartCoroutine(isLong ? LongHintRoutine(pick) : HintRoutine(pick));
             Sfx.Play(Sfx.Id.Hint);
             return true;

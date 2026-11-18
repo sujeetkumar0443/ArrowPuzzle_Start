@@ -7,16 +7,19 @@ namespace ArrowPuzzle
     /// <summary>Game: header (pause, level, hearts), arrows-left chip, board card, Hint and Restart.</summary>
     public class ScreenGame : AppScreen
     {
-        const float Pad = 24f;
-        const float HeaderH = 48f;
-        const float ChipTop = Pad + HeaderH + 14f;          // 86
-        const float ChipH = 34f;
-        const float BoardTop = ChipTop + ChipH + 16f;       // 136
-        const float BtnBottom = 40f, BtnH = 72f;
-        const float BoardGap = 24f;                         // between the buttons and the board area
-        const float BoardBottom = BtnBottom + BtnH + BoardGap; // 136 (no banner)
-        const float CardPad = 10f;
+        // header (design px from the safe-area top): pause 46 at y 24, LEVEL / MOVES in the centre, Skip right, hearts under
+        const float Pad = 20f, TopY = 24f, PauseD = 46f, PauseR = 14f;
+        const float LevelY = 22f, LevelFontD = 13f, MovesY = 38f, MovesH = 50f, MovesFontD = 44f, MovesLabelD = 14f;
+        const float HeartsY = 92f, HeartD = 18f, HeartGap = 6f;
+        const float BoardTop = HeartsY + HeartD + 12f;      // 122: the board area starts under the hearts
+        const float BoardSide = 10f;                        // board area side margin (no card any more)
+        // bottom: two round 62 buttons side by side, centred; the hint count pill hangs below the Hint button
+        const float BtnBottom = 40f, BtnH = 62f, BtnGapX = 30f, BadgeH = 20f, BadgeOver = 9f;
+        const float BoardGap = 12f;                         // between the buttons (with the badge) and the board area
+        const float BoardBottom = BtnBottom + BtnH + BoardGap; // no banner
+        const float CardPad = 4f;
         const float BannerGap = 8f, BtnEdge = 4f;           // the buttons' raised edge sits 8 above the banner
+        const float ChipH = 34f;                            // (old chip height, kept for Chip())
 
         // wrong-move feedback (approved demo values)
         const float FlashStrength = 1.0f;   // peak alpha of the red screen flash
@@ -38,7 +41,7 @@ namespace ArrowPuzzle
         const float ToastIn = 0.2f, ToastHold = 1.2f, ToastOut = 0.3f;
 
         // Skip pill (design px): right end of the chip band, 44 high
-        const float SkipH = 44f, SkipEdgeD = 3f, SkipFont = 17f, SkipIconD = 14f, SkipBadgeD = 22f, SkipWaitAlpha = 0.55f;
+        const float SkipH = 42f, SkipEdgeD = 3f, SkipFont = 17f, SkipIconD = 14f, SkipBadgeD = 22f, SkipWaitAlpha = 0.55f;
         const int SkipBonus = 2;
         const string SkipToast = "Ad not ready, try again";
         static readonly Color SkipGoldEdge = Theme.Hex("#C98410");
@@ -62,13 +65,14 @@ namespace ArrowPuzzle
         bool skipWaiting; // a Skip / +2 skips video is loading or playing: taps are ignored
         int skipRequest;  // bumped per request, so a late result can't act on a newer state
 
-        Text levelText, countText, hintCount, modeText;
-        Image modePill;
+        Text levelText, movesText, hintCount;
+        int moves; // taps that hit an arrow (free or blocked); reset on every level start / restart
         GameMode mode = GameMode.Classic;
         readonly Image[] hearts = new Image[BoardView.MaxLives];
         readonly RectTransform[] heartRts = new RectTransform[BoardView.MaxLives];
         readonly Coroutine[] heartFx = new Coroutine[BoardView.MaxLives];
         RectTransform area, card, hintRt, restartRt;
+        Image backdropDots;
         BoardZoom zoom;
         int level; // global level (LevelPath / Campaign)
         float btnBottom = BtnBottom, toastY = ToastY; // move up above the banner (ApplyBannerLayout)
@@ -88,17 +92,19 @@ namespace ArrowPuzzle
 
         protected override void Build()
         {
-            BannerPlaceholder.Create(Root); // first child: buttons, board and flying arrows draw over it
+            BuildBackdrop();
+            BannerPlaceholder.Create(Root); // buttons, board and flying arrows draw over it
             BuildHeader();
-            BuildChip();
+            BuildSkip();
 
-            // free space for the board card, between the chip and the bottom buttons
+            // the board uses the whole free area between the header and the bottom buttons (also the zoom / pan area)
             area = Ui.New(Root, "BoardArea");
             Ui.Fill(area);
-            area.offsetMin = new Vector2(Theme.D(Pad), Theme.D(BoardBottom));
-            area.offsetMax = new Vector2(-Theme.D(Pad), -Theme.D(BoardTop));
+            area.offsetMin = new Vector2(Theme.D(BoardSide), Theme.D(BoardBottom));
+            area.offsetMax = new Vector2(-Theme.D(BoardSide), -Theme.D(BoardTop));
 
-            var cardImg = Ui.Img(area, "BoardCard", Theme.Rounded, Theme.Card, 28f);
+            // no visible card: the arrows are drawn on the screen background (the card only holds the board for zoom)
+            var cardImg = Ui.Img(area, "BoardCard", null, Color.clear);
             cardImg.raycastTarget = false;
             card = cardImg.rectTransform;
             Ui.PlaceD(card, Ui.C, Vector2.zero, Vector2.zero);
@@ -265,49 +271,62 @@ namespace ArrowPuzzle
             return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
         }
 
+        /// <summary>Screen background (theme Bg or gradient) with the dot pattern when the theme has dots, under the insets too.</summary>
+        void BuildBackdrop()
+        {
+            var bg = Ui.Img(Root, "Bg", null, Theme.Bg);
+            Theme.PaintBg(bg);
+            bg.raycastTarget = false;
+            Ui.Fill(bg.rectTransform);
+            bg.rectTransform.offsetMin = new Vector2(0f, -Theme.D(400f));
+            bg.rectTransform.offsetMax = new Vector2(0f, Theme.D(400f));
+            backdropDots = Ui.Img(bg.rectTransform, "Dots", Theme.DotTile, Theme.Dot);
+            backdropDots.type = Image.Type.Tiled;
+            backdropDots.pixelsPerUnitMultiplier = 64f / (34f * Theme.K);
+            backdropDots.raycastTarget = false;
+            Ui.Fill(backdropDots.rectTransform);
+            backdropDots.gameObject.SetActive(Theme.HasDots);
+        }
+
+        /// <summary>
+        /// Pause (46, Card with a bottom edge) left; centre "LEVEL n" (small, InkSoft) over the big MOVES count (Accent) and
+        /// "MOVES"; the 3 hearts (18) centred under it. The Skip pill sits at the right of the top row (BuildSkip).
+        /// </summary>
         void BuildHeader()
         {
-            var pause = Ui.Btn(Root, "", Theme.Card, Theme.Ink, 0f, HeaderH * 0.5f, Theme.CardShadow, 3f,
-                               () => GameApp.I.Open("PopupPause"), Icon.Pause, 22f);
-            Ui.PlaceD((RectTransform)pause.transform, Ui.TL, new Vector2(Pad, -Pad), new Vector2(HeaderH, HeaderH));
+            var pause = Ui.Btn(Root, "", Theme.Card, Theme.Ink, 0f, PauseR, Theme.CardShadow, 3f,
+                               () => GameApp.I.Open("PopupPause"), Icon.Pause, 20f);
+            Ui.PlaceD((RectTransform)pause.transform, Ui.TL, new Vector2(Pad, -TopY), new Vector2(PauseD, PauseD));
 
-            levelText = Ui.Label(Root, "", 30f, Theme.Ink, Weight.Bold);
-            Ui.PlaceD(levelText.rectTransform, Ui.TC, new Vector2(0f, -Pad), new Vector2(180f, HeaderH));
+            levelText = Ui.Label(Root, "", LevelFontD, Theme.InkSoft, Weight.Semi);
+            Ui.PlaceD(levelText.rectTransform, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -LevelY), new Vector2(180f, 18f));
 
-            // 3 hearts of 28, gap 4, right aligned
-            var row = Ui.New(Root, "Hearts");
-            float w = 28f * hearts.Length + 4f * (hearts.Length - 1);
-            Ui.PlaceD(row, Ui.TR, new Vector2(-Pad, -Pad), new Vector2(w, HeaderH));
+            var movesRow = Ui.New(Root, "Moves");
+            Ui.PlaceD(movesRow, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -MovesY), new Vector2(180f, MovesH));
+            var row = Ui.Row(movesRow, 6f, TextAnchor.LowerCenter);
+            row.childForceExpandWidth = false;
+            movesText = Ui.Label(movesRow, "0", MovesFontD, Theme.Accent, Weight.Bold);
+            var movesLabel = Ui.Label(movesRow, "MOVES", MovesLabelD, Theme.InkSoft, Weight.Semi);
+            movesLabel.alignment = TextAnchor.LowerCenter;
+            movesLabel.gameObject.AddComponent<LayoutElement>().preferredHeight = Theme.D(MovesH * 0.62f);
+
+            // 3 hearts, centred under the moves
+            var hrow = Ui.New(Root, "Hearts");
+            float w = HeartD * hearts.Length + HeartGap * (hearts.Length - 1);
+            Ui.PlaceD(hrow, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -HeartsY), new Vector2(w, HeartD));
             for (int i = 0; i < hearts.Length; i++)
             {
-                var h = Icons.Make(row, Icon.Heart, Theme.Error, 28f);
-                Ui.PlaceD(h, new Vector2(0f, 0.5f), new Vector2(i * 32f, 0f), new Vector2(28f, 28f));
+                var h = Icons.Make(hrow, Icon.Heart, Theme.Error, HeartD);
+                Ui.PlaceD(h, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(HeartD * 0.5f + i * (HeartD + HeartGap), 0f), new Vector2(HeartD, HeartD));
                 heartRts[i] = h;
                 hearts[i] = h.GetComponentInChildren<Image>();
             }
         }
 
-        /// <summary>
-        /// Left-aligned row, gap 8: mode pill (the mode name only) + arrows-left chip (arrow icon + N), both 34 high
-        /// with radius 17; the Skip pill sits at the right end of the same band (BuildSkip). Compact so the three
-        /// always fit: about 170 + Skip 104..116 of the 342 between the side margins.
-        /// </summary>
-        void BuildChip()
+        void SetMoves(int n)
         {
-            var row = Ui.New(Root, "ChipRow");
-            Ui.PlaceD(row, Ui.TL, new Vector2(Pad, -ChipTop), new Vector2(0f, ChipH));
-            Ui.Row(row, 8f, TextAnchor.MiddleLeft);
-            row.gameObject.AddComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            modePill = Chip(row, 14f, Theme.Teal);
-            modeText = Ui.Label(modePill.transform, "", 16f, Theme.OnColor, Weight.Semi);
-
-            var count = Chip(row, 14f, Theme.Card);
-            var icon = Icons.Make(count.transform, Icon.ArrowRight, Theme.InkSoft, 18f, 2.6f);
-            Ui.Size(icon, 18f, 18f);
-            countText = Ui.Label(count.transform, "0", 18f, Theme.Ink, Weight.Bold);
-
-            BuildSkip();
+            moves = n;
+            if (movesText != null) movesText.text = n.ToString();
         }
 
         // ------------------------------------------------------------------ Skip level (rewarded, daily limit)
@@ -318,15 +337,15 @@ namespace ArrowPuzzle
         /// </summary>
         void BuildSkip()
         {
-            var b = Ui.Btn(Root, "Skip", SkipPurple, Theme.OnColor, SkipFont, SkipH * 0.5f, SkipPurpleEdge, SkipEdgeD,
-                           OnSkipTap, Icon.Play, SkipIconD);
+            var b = Ui.Btn(Root, "SKIP", SkipPurple, Theme.OnColor, SkipFont, SkipH * 0.5f, SkipPurpleEdge, SkipEdgeD,
+                           OnSkipTap, Icon.Skip, SkipIconD);
             skipRt = (RectTransform)b.transform;
             // pivot right-middle: every scale keeps the right edge on the margin and grows left / up / down only
             // (at the 1.18 bounce: y 77..129, between the header (72) and the board (136), far from the chip row)
-            Ui.PlaceD(skipRt, Ui.TR, new Vector2(1f, 0.5f), new Vector2(-Pad, -(ChipTop + ChipH * 0.5f)), new Vector2(0f, SkipH));
+            Ui.PlaceD(skipRt, Ui.TR, new Vector2(1f, 0.5f), new Vector2(-Pad, -(TopY + PauseD * 0.5f)), new Vector2(0f, SkipH));
             var squash = b.GetComponent<PressScale>(); // its own 0.95 squash would fight ApplySkipAnim's scale
             if (squash != null) UnityEngine.Object.Destroy(squash);
-            var iconRt = skipRt.Find("Icon_" + Icon.Play);
+            var iconRt = skipRt.Find("Icon_" + Icon.Skip);
             skipIcon = iconRt != null ? iconRt.GetComponentsInChildren<Image>() : new Image[0];
             skipIconFill = skipIcon.Length > 0 ? skipIcon[0].rectTransform : null;
             var hlg = b.GetComponent<HorizontalLayoutGroup>();
@@ -362,7 +381,7 @@ namespace ArrowPuzzle
             Color fg = any ? Theme.OnColor : Theme.Ink;
             skipLabel.color = fg;
             foreach (var img in skipIcon) img.color = fg;
-            skipLabel.text = skipWaiting ? "..." : any ? "Skip" : "+" + SkipBonus + " skips";
+            skipLabel.text = skipWaiting ? "..." : any ? "SKIP" : "+" + SkipBonus + " skips";
             skipBadge.gameObject.SetActive(any && !skipWaiting);
             skipBadgeText.text = left.ToString();
             skipGroup.alpha = skipWaiting ? SkipWaitAlpha : 1f;
@@ -482,25 +501,24 @@ namespace ArrowPuzzle
             return chip;
         }
 
+        /// <summary>Round Hint and Restart buttons (62, Card with a bottom edge) side by side, centred above the banner.</summary>
         void BuildButtons()
         {
-            const float w = (342f - 14f) * 0.5f;
-
-            var hint = Ui.Btn(Root, "Hint", Theme.Teal, Theme.Ink, 22f, 24f, Theme.TealShadow, 4f, OnHint, Icon.Bulb, 26f);
+            var hint = Ui.Btn(Root, "", Theme.Card, Theme.Ink, 0f, BtnH * 0.5f, Theme.CardShadow, BtnEdge, OnHint, Icon.Bulb, 28f);
             hintRt = (RectTransform)hint.transform;
-            Ui.PlaceD(hintRt, Ui.BL, new Vector2(Pad, BtnBottom), new Vector2(w, BtnH));
+            Ui.PlaceD(hintRt, Ui.BC, new Vector2(0.5f, 0f), new Vector2(-(BtnH + BtnGapX) * 0.5f, BtnBottom), new Vector2(BtnH, BtnH));
 
-            // badge: circle 30 sticking out 6 right / 10 up of the top-right corner
-            var badge = Ui.Img(hint.transform, "Badge", Theme.Circle, Theme.Panel);
+            // hints left: small Accent pill hanging below the button
+            var badge = ScreenKit.Rounded(hint.transform, "Badge", Theme.Accent, BadgeH * 0.5f);
             badge.raycastTarget = false;
             badge.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
-            Ui.PlaceD(badge.rectTransform, Ui.TR, new Vector2(6f, 10f), new Vector2(30f, 30f));
-            hintCount = Ui.Label(badge.transform, "", 16f, Theme.PanelText, Weight.Bold);
+            Ui.PlaceD(badge.rectTransform, Ui.BC, new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(30f, BadgeH));
+            hintCount = Ui.Label(badge.transform, "", 13f, Theme.AccentText, Weight.Bold);
             Ui.Fill(hintCount.rectTransform);
 
-            var restart = Ui.Btn(Root, "Restart", Theme.Card, Theme.Ink, 22f, 24f, Theme.CardShadow, 4f, Restart, Icon.Restart, 26f);
+            var restart = Ui.Btn(Root, "", Theme.Card, Theme.Ink, 0f, BtnH * 0.5f, Theme.CardShadow, BtnEdge, Restart, Icon.Restart, 28f);
             restartRt = (RectTransform)restart.transform;
-            Ui.PlaceD(restartRt, Ui.BR, new Vector2(-Pad, BtnBottom), new Vector2(w, BtnH));
+            Ui.PlaceD(restartRt, Ui.BC, new Vector2(0.5f, 0f), new Vector2((BtnH + BtnGapX) * 0.5f, BtnBottom), new Vector2(BtnH, BtnH));
         }
 
         // ------------------------------------------------------------------ banner
@@ -516,9 +534,9 @@ namespace ArrowPuzzle
             if (Mathf.Abs(y - btnBottom) < 0.5f) return false; // the banner keeps its size across refreshes
             btnBottom = y;
             toastY = y + BtnH + 18f;
-            hintRt.anchoredPosition = new Vector2(Theme.D(Pad), Theme.D(y));
-            restartRt.anchoredPosition = new Vector2(-Theme.D(Pad), Theme.D(y));
-            area.offsetMin = new Vector2(Theme.D(Pad), Theme.D(y + BtnH + BoardGap));
+            hintRt.anchoredPosition = new Vector2(-Theme.D((BtnH + BtnGapX) * 0.5f), Theme.D(y));
+            restartRt.anchoredPosition = new Vector2(Theme.D((BtnH + BtnGapX) * 0.5f), Theme.D(y));
+            area.offsetMin = new Vector2(Theme.D(BoardSide), Theme.D(y + BtnH + BoardGap));
             return true;
         }
 
@@ -630,11 +648,10 @@ namespace ArrowPuzzle
             level = g;
             GameApp.I.CurrentMode = mode;
             GameApp.I.CurrentLevel = level;
-            levelText.text = sample ? "Long " + LongSamplesDev.Active : "Level " + level;
+            levelText.text = sample ? "SAMPLE " + LongSamplesDev.Active : "LEVEL " + level;
+            SetMoves(0);
             RefreshHints();
 
-            modePill.color = Theme.Teal;
-            modeText.text = sample ? data.shape : LevelPath.TypeName(level); // the shape name (compact chip row: room for the Skip pill)
             skipWaiting = false;
             RefreshSkip();
             skipAttentionT0 = Time.unscaledTime + SkipAttentionDelay; // one stronger bounce 1 s into every level
@@ -738,6 +755,9 @@ namespace ArrowPuzzle
         /// <summary>Any arrow tap (wrong moves too). left = arrows not yet removed / leaving after it.</summary>
         void OnTapped(int left)
         {
+            SetMoves(moves + 1); // every tap that hits an arrow, free or blocked (no effect on stars)
+            if (popFx != null) GameApp.I.StopCoroutine(popFx);
+            popFx = GameApp.I.StartCoroutine(CountPop());
             if (!timerStarted)
             {
                 timerStarted = true;
@@ -829,12 +849,11 @@ namespace ArrowPuzzle
 
         void OnRemaining(int n)
         {
-            countText.text = n.ToString();
+            // (the old arrows-left chip is gone; the count is still tracked for the pop / analytics)
             bool pop = n < shownRemaining;
             shownRemaining = n;
             if (!pop) return;
-            if (popFx != null) GameApp.I.StopCoroutine(popFx);
-            popFx = GameApp.I.StartCoroutine(CountPop());
+            // no counter to pop any more
         }
 
         void OnBumped()
@@ -865,7 +884,7 @@ namespace ArrowPuzzle
             }
             if (flash != null) flash.gameObject.SetActive(false);
             Root.anchoredPosition = Vector2.zero;
-            if (countText != null) countText.rectTransform.localScale = Vector3.one;
+            if (movesText != null) movesText.rectTransform.localScale = Vector3.one;
         }
 
         /// <summary>Rise to the peak in the first 12 % (ease-out), then fall as (1-x)^2.</summary>
@@ -930,10 +949,10 @@ namespace ArrowPuzzle
             heartFx[i] = null;
         }
 
-        /// <summary>"Arrows left" count: scale 1 -> 1.35 -> 1 over 0.26 s.</summary>
+        /// <summary>MOVES count: scale 1 -> 1.35 -> 1 over 0.26 s.</summary>
         IEnumerator CountPop()
         {
-            var crt = countText.rectTransform;
+            var crt = movesText.rectTransform;
             const float dur = 0.26f;
             float t = 0f;
             while (t < dur)

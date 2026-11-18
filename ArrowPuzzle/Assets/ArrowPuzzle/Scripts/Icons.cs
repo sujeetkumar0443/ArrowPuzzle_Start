@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ArrowPuzzle
 {
-    public enum Icon { Bulb, Star, Heart, Gear, Back, Pause, Restart, Home, Play, Sound, Vibrate, Lock, ArrowRight, Share, Shield, Chevron, Music, Check }
+    public enum Icon { Bulb, Star, Heart, Gear, Back, Pause, Restart, Home, Play, Sound, Vibrate, Lock, ArrowRight, Share, Shield, Chevron, Music, Check, Skip }
 
     /// <summary>
     /// Icons drawn in code (stroke polylines or generated sprites), copied from the design's 24x24 icon set.
@@ -111,6 +111,18 @@ namespace ArrowPuzzle
                 case Icon.Chevron:
                     Stroke(rt, color, 2.6f, s, P(9, 5), P(16, 12), P(9, 19));
                     break;
+
+                case Icon.Skip: // play triangle + bar (Images, so tinting the Images recolours it)
+                {
+                    var tri = Ui.Img(rt, "fill", Theme.Triangle, color);
+                    tri.raycastTarget = false;
+                    var trt = tri.rectTransform;
+                    trt.anchorMin = new Vector2(0.1f, 0.2f);
+                    trt.anchorMax = new Vector2(0.66f, 0.8f);
+                    trt.offsetMin = trt.offsetMax = Vector2.zero;
+                    Rect(rt, 16.5f, 5f, 3.2f, 14f, 1.2f, color, sizeD);
+                    break;
+                }
 
                 case Icon.Check:
                     Stroke(rt, color, 3f, s, P(5, 12.5f), P(10, 17.5f), P(19, 7));

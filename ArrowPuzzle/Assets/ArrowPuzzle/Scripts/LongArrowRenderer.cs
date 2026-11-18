@@ -17,6 +17,7 @@ namespace ArrowPuzzle
         public const float TileCell = 0.92f;       // tile square size, cells
         public const float PressMul = 1.35f, HaloMul = 4f, HintGlowMul = 4.5f;
         public const float GlowMul = 3f, GlowAlpha = 0.22f; // theme Glow (night): soft copy under each static arrow
+        public const bool BoardTiles = false;               // game board: no cell tiles (arrows on the screen background)
 
         // ---- animation timings (tune here; BoardView's long-arrow routines read them)
         public const float ExitCellsPerSecond = 110f; // exit speed once the ease-in is done
@@ -446,6 +447,7 @@ namespace ArrowPuzzle
             cell = cellSize;
             tiles.color = LongStyle.Tile;
             tiles.Set(data.mask, data.cols, data.rows, cell);
+            tiles.gameObject.SetActive(LongStyle.BoardTiles);
 
             for (int i = 0; i < rest.Count; i++)
             {
