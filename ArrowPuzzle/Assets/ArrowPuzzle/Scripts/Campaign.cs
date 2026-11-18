@@ -25,6 +25,15 @@ namespace ArrowPuzzle
 
         public const string Folder = "Levels/long";   // under Resources
         public const string IndexFile = "index";
+        public const string ThumbsFile = "thumbs"; // one small level per shape (level n = shape n-1), for the gallery
+
+        /// <summary>The gallery thumbnail of a shape (Resources/Levels/long/thumbs.txt, parsed once). Null if missing.</summary>
+        public static LevelData Thumb(int shapeIndex)
+        {
+            var d = ShapeLevels.GetFile("long/" + ThumbsFile, shapeIndex + 1);
+            if (d != null) d.longArrows = true;
+            return d;
+        }
 
         static int Clamp(int level) { return level < 1 ? 1 : level > TotalLevels ? TotalLevels : level; }
 

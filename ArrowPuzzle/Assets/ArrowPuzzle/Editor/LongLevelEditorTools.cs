@@ -38,6 +38,18 @@ namespace ArrowPuzzle
             else Debug.Log(head);
         }
 
+        [MenuItem("Arrow/Long Levels/Build Shape Thumbnails")]
+        static void BuildThumbs()
+        {
+            string root = Path.GetDirectoryName(Application.dataPath);
+            LongLevelGen.Warn = s => Debug.LogWarning(s);
+            string report;
+            LongCampaignBuild.BuildThumbs(root, text => ShapeLevels.VerifyText(text), out report);
+            AssetDatabase.Refresh();
+            if (report.Contains(Campaign.ShapeCount + "/" + Campaign.ShapeCount + " PASS")) Debug.Log(report);
+            else Debug.LogError(report);
+        }
+
         /// <summary>Every campaign file through the game's parser + peel test, plus the index (arrow counts, all levels present).</summary>
         [MenuItem("Arrow/Long Levels/Verify Full Level Set")]
         static void VerifyFullSet()

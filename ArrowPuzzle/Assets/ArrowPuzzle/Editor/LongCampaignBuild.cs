@@ -131,6 +131,46 @@ namespace ArrowPuzzle
             return levels;
         }
 
+        // ------------------------------------------------------------------ gallery thumbnails
+
+        public const double ThumbD = 0.6;
+
+        /// <summary>Seed base of shape index s's thumbnail (outside the campaign's level * 1000 range).</summary>
+        public static int ThumbSeed(int s) { return 5000000 + s * 1000; }
+
+        /// <summary>
+        /// One mid-density level per campaign shape (d = ThumbD) -> Resources/Levels/long/thumbs.txt, level number =
+        /// shape index + 1, same text format. The Shapes gallery draws these instead of parsing the shape files.
+        /// Returns the text; verify = the game's parser + peel test.
+        /// </summary>
+        public static string BuildThumbs(string projectRoot, Func<string, IDictionary<int, string>> verify, out string report)
+        {
+            LongShapes.LoadDefs(projectRoot);
+            var levels = new LongLevel[Campaign.ShapeCount];
+            foreach (var s in Campaign.Shapes) LongLevelGen.BBox(s);
+            Parallel.For(0, Campaign.ShapeCount, i => levels[i] = LongLevelGen.Generate(Campaign.Shapes[i], ThumbD, ThumbSeed(i)));
+            var nums = new List<int>();
+            for (int i = 0; i < levels.Length; i++) nums.Add(i + 1);
+            string text = LongLevelGen.ToText(levels, nums, "# Shape gallery thumbnails (Arrow/Long Levels/Build Shape Thumbnails): level n = Campaign shape n-1, d="
+                                              + ThumbD.ToString("0.##", CultureInfo.InvariantCulture) + ".", "0.###");
+            string path = Path.Combine(projectRoot, OutDir, Campaign.ThumbsFile + ".txt");
+            File.WriteAllText(path, text);
+
+            var check = verify != null ? verify(text) : null;
+            int pass = 0;
+            var sb = new StringBuilder();
+            for (int i = 0; i < levels.Length; i++)
+            {
+                string err = null;
+                bool ok = check != null && check.TryGetValue(i + 1, out err) && err == null;
+                if (ok) pass++;
+                else sb.Append("\n  ").Append(i + 1).Append(' ').Append(levels[i].Shape).Append(": ").Append(err ?? "missing");
+            }
+            report = "Shape thumbnails: " + levels.Length + " levels, peel test " + pass + "/" + levels.Length + " PASS, "
+                     + (new FileInfo(path).Length / 1024.0).ToString("0.0", CultureInfo.InvariantCulture) + " KB -> " + path + sb;
+            return text;
+        }
+
         static long DirBytes(string dir)
         {
             long b = 0;
