@@ -74,16 +74,24 @@ namespace ArrowPuzzle
             BannerPlaceholder.Create(Root); // just above the background, under everything else
             BuildTopBar();
             mark = Wordmark.Build(Root); // end state, identical to the splash's last frame
-            if (Debug.isDebugBuild) // editor and development builds only
-            {
-                // TEMPORARY dev route: hold the ARROW word for 1 s -> long-arrow samples
-                var hold = Ui.Img(mark.Root, "LongSamplesHold", null, Color.clear);
-                Ui.PlaceD(hold.rectTransform, Ui.C, new Vector2(0f, 44f), new Vector2(280f, 84f));
-                hold.gameObject.AddComponent<LongPressTrigger>().onHold = () => GameApp.I.Open("PopupLongSamples");
-            }
+            // TEMPORARY dev route to the long-arrow samples (LongSamplesDev.OpenList: Editor / Development Build only,
+            // logs "blocked" otherwise): hold the wordmark 1 s. An invisible raycast Image over the whole ARROW PUZZLE
+            // art (a bit larger), last child of the wordmark so it is above the letters; the top-bar buttons are
+            // moved above it at the end of Build.
+            var hold = Ui.Img(mark.Root, "DevHold", null, Color.clear);
+            hold.raycastTarget = true;
+            Ui.PlaceD(hold.rectTransform, Ui.C, Vector2.zero, new Vector2(Wordmark.WidthD + 10f, Wordmark.HeightD + 20f));
+            hold.gameObject.AddComponent<LongPressTrigger>().onHold = () => LongSamplesDev.OpenList("long press");
             BuildRuler();
             BuildPlay();
             BuildSkips();
+
+            // second dev route: 7 taps on the coin pill within 3 s (the pill takes taps only for this)
+            var pillImg = coinPill.GetComponent<Image>();
+            pillImg.raycastTarget = true;
+            coinPill.gameObject.AddComponent<MultiTapTrigger>().onTaps = () => LongSamplesDev.OpenList("coin taps");
+            settings.SetAsLastSibling(); // buttons stay above the dev hold area wherever the layout puts them
+            coinPill.SetAsLastSibling();
 
             Root.gameObject.AddComponent<HomeTicker>().tick = Tick;
             BannerDebug.Create(Root, "ScreenHome"); // only when Ads.ShowBannerDebug
