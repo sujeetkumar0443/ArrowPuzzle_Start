@@ -628,11 +628,16 @@ namespace ArrowPuzzle
             var type = GameMode.Shapes; // kept for GameApp.CurrentMode / ClearedMode (one level type now)
             LevelData data;
             bool sample = LongSamplesDev.Active > 0;
+            // TEMPORARY dev route: the first start plays the picked sample; the same n again = Restart; another n
+            // (PopupWin's NEXT) = the next sample; past the last sample the route ends and level n plays (no wrap).
+            if (sample && !LongSamplesDev.Pending && n != level && !LongSamplesDev.Next())
+            {
+                LongSamplesDev.Stop();
+                sample = false;
+            }
             if (sample)
             {
-                // TEMPORARY dev route: the first start plays the picked sample; the same n again = Restart; another n
-                // (PopupWin's NEXT) = the next sample. g stays a real level so the popups' level checks keep working.
-                if (!LongSamplesDev.Pending && n != level) LongSamplesDev.Next();
+                // g stays a real level so the popups' level checks keep working
                 LongSamplesDev.Started();
                 // a real, unlocked level whose next one is unlocked too, so PopupWin's NEXT comes back here
                 g = Mathf.Max(1, Save.UnlockedGlobal - 1);

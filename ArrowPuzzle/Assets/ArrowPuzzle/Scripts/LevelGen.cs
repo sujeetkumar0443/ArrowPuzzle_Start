@@ -18,6 +18,7 @@ namespace ArrowPuzzle
         public bool[,] mask;   // [x, y] true = board cell; null = full rectangle (Classic)
         public string shape;   // shape name for Shapes / Mosaic levels, null for Classic
         public bool longArrows; // long winding arrows: BoardView draws them with LongArrowRenderer
+        public int seed;        // generator seed from the level file's "seed=" header (0 if none)
     }
 
     /// <summary>

@@ -77,19 +77,34 @@ namespace ArrowPuzzle
         /// <summary>Deterministic aspect cols / rows of a normal level, AspectMin..AspectMax (integer hash of the level).</summary>
         public static double Aspect(int level)
         {
+            return AspectMin + (AspectMax - AspectMin) * Unit(level, 0u);
+        }
+
+        /// <summary>Deterministic 0..1 value of (level, salt); salt 0 = the original Aspect hash.</summary>
+        static double Unit(int level, uint salt)
+        {
             unchecked
             {
-                uint h = (uint)level * 2654435761u;
+                uint h = (uint)level * 2654435761u + salt * 0x9E3779B9u;
                 h ^= h >> 13;
                 h *= 2246822519u;
                 h ^= h >> 16;
-                return AspectMin + (AspectMax - AspectMin) * (h % 10001) / 10000.0;
+                return (h % 10001) / 10000.0;
             }
         }
 
+        // Variety: without it, every normal level from ~180 on had d = 1 -> the same 31 x 46 board and length mix.
+        public const double SizeScaleMin = 0.8;   // rows = lerp(11, 46, d) * (SizeScaleMin..1) per level
+        public const double LenJitter = 0.15;     // arrow length mix from d +- this (per level), clamped to 0..1
+        public const int NeighbourStep = 3;       // a size equal to the previous normal level's moves this many rows
+
+        static int[,] sizes; // [level, 0 = cols / 1 = rows], normal levels only, filled in level order
+
         /// <summary>
-        /// Size and extra rules of normal level `level` at difficulty d: rows = round(lerp(11, 46, d)), cols =
-        /// round(rows * Aspect) (at least 7, at most LongLevelGen.MaxCols). Levels 1 and 2: 8 x 11, 8..12 arrows.
+        /// Size and extra rules of normal level `level` at difficulty d: rows = round(lerp(11, 46, d) * scale) with a
+        /// per-level scale SizeScaleMin..1 (at least 11), cols = round(rows * Aspect) (at least 7, at most
+        /// LongLevelGen.MaxCols); a size equal to the previous normal level's is moved NeighbourStep rows; the arrow
+        /// length mix uses d +- LenJitter. Levels 1 and 2: 8 x 11, 8..12 arrows.
         /// </summary>
         public static LongLevelGen.RectOptions NormalSize(int level, double d)
         {
@@ -98,10 +113,45 @@ namespace ArrowPuzzle
                 {
                     Cols = TinyCols, Rows = TinyRows, LenD = TinyLenD, MinArrows = TinyMinArrows, MaxArrows = TinyMaxArrows
                 };
-            int rows = (int)Math.Floor(NormalRowsMin + (NormalRowsMax - NormalRowsMin) * d + 0.5);
+            var s = Sizes();
+            double lenD = Math.Max(0, Math.Min(1, d + (Unit(level, 2u) * 2 - 1) * LenJitter));
+            return new LongLevelGen.RectOptions { Cols = s[level, 0], Rows = s[level, 1], LenD = lenD };
+        }
+
+        static int[,] Sizes()
+        {
+            lock (typeof(LongCampaignBuild))
+            {
+                if (sizes != null) return sizes;
+                var s = new int[Campaign.TotalLevels + 1, 2];
+                int prevC = TinyCols, prevR = TinyRows;
+                for (int g = 3; g <= Campaign.TotalLevels; g++)
+                {
+                    if (Campaign.IsShape(g)) continue;
+                    double scale = SizeScaleMin + (1 - SizeScaleMin) * Unit(g, 1u);
+                    int rows = (int)Math.Floor((NormalRowsMin + (NormalRowsMax - NormalRowsMin) * D(g)) * scale + 0.5);
+                    rows = Math.Max(NormalRowsMin, rows);
+                    int cols = ColsFor(g, rows);
+                    if (cols == prevC && rows == prevR)
+                    {
+                        rows = rows - NeighbourStep >= NormalRowsMin ? rows - NeighbourStep : rows + NeighbourStep;
+                        cols = ColsFor(g, rows);
+                        if (cols == prevC) cols += cols > NormalColsMin ? -1 : 1; // rows differ anyway; cols too
+                    }
+                    s[g, 0] = cols;
+                    s[g, 1] = rows;
+                    prevC = cols;
+                    prevR = rows;
+                }
+                sizes = s;
+                return sizes;
+            }
+        }
+
+        static int ColsFor(int level, int rows)
+        {
             int cols = (int)Math.Floor(rows * Aspect(level) + 0.5);
-            cols = Math.Max(NormalColsMin, Math.Min(LongLevelGen.MaxCols, cols));
-            return new LongLevelGen.RectOptions { Cols = cols, Rows = rows };
+            return Math.Max(NormalColsMin, Math.Min(LongLevelGen.MaxCols, cols));
         }
 
         /// <summary>One campaign level: a shape (Campaign.ShapeOfLevel) or a normal rectangle board.</summary>

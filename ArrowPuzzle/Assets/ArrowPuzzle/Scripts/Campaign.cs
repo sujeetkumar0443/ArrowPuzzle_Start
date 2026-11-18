@@ -7,8 +7,8 @@ namespace ArrowPuzzle
 
     /// <summary>
     /// The one long-arrow campaign: 333 global levels. Level L is a SHAPE level when L % 3 == 0, else a NORMAL board (the
-    /// whole rectangle is the mask). Shape level k = L / 3 - 1 (0..110) is shape k % 37 (Shapes order) in round k / 37
-    /// (0..2): every shape once per round, harder each round. A shape is unlocked once Save.UnlockedGlobal reaches its
+    /// whole rectangle is the mask). Shape level k = L / 3 - 1 (0..110) is in round k / 37 (0..2); round 0 follows the
+    /// Shapes order, rounds 1 and 2 a fixed shuffle (Order): every shape once per round, harder each round. A shape is unlocked once Save.UnlockedGlobal reaches its
     /// round-0 level 3 * (index + 1). Level data: Resources/Levels/long/shape_NAME.txt (its 3 rounds) and
     /// long/normal_NN.txt (25 normal levels each), built offline by "Arrow/Long Levels/Build Full Level Set";
     /// long/index.txt gives every level's file, size, arrow count and difficulty without parsing the level.
@@ -54,7 +54,68 @@ namespace ArrowPuzzle
         public static int ShapeIndexOf(int level)
         {
             level = Clamp(level);
-            return level % 3 == 0 ? (level / 3 - 1) % ShapeCount : -1;
+            return level % 3 == 0 ? Order()[level / 3 - 1] : -1;
+        }
+
+        // ------------------------------------------------------------------ shape order
+
+        /// <summary>Fixed seed of the round 1 / 2 shuffles (same order for every player; changing it needs a rebuild).</summary>
+        public const uint OrderSeed = 7919u;
+
+        /// <summary>A shape never comes back within this many shape levels across a round boundary.</summary>
+        public const int MinShapeGap = 6;
+
+        static int[] order;
+
+        /// <summary>
+        /// Shape of every shape level k (0..ShapeLevelCount-1). Round 0 = the Shapes order (the gallery and the unlock
+        /// levels depend on it); rounds 1 and 2 = a fixed-seed shuffle of all 37, so each shape still appears once per
+        /// round, but not in the same order again, and none of a round's first MinShapeGap shapes is among the previous
+        /// round's last MinShapeGap (no back-to-back repeat at the wrap). Own integer RNG, so the Unity runtime and the
+        /// offline builder always agree.
+        /// </summary>
+        static int[] Order()
+        {
+            if (order != null) return order;
+            var o = new int[ShapeLevelCount];
+            for (int i = 0; i < ShapeCount; i++) o[i] = i;
+            for (int r = 1; r < Rounds; r++)
+            {
+                int start = r * ShapeCount;
+                for (uint attempt = 0; ; attempt++)
+                {
+                    uint s = Mix(OrderSeed ^ ((uint)r * 0x9E3779B9u) ^ (attempt * 0x85EBCA6Bu));
+                    for (int i = 0; i < ShapeCount; i++) o[start + i] = i;
+                    for (int i = ShapeCount - 1; i > 0; i--) // Fisher-Yates
+                    {
+                        s = Mix(s + 0x6D2B79F5u);
+                        int j = (int)(s % (uint)(i + 1));
+                        int t = o[start + i]; o[start + i] = o[start + j]; o[start + j] = t;
+                    }
+                    if (GapOk(o, start)) break;
+                }
+            }
+            order = o; // built in a local first: safe if two threads (the parallel offline build) race here
+            return order;
+        }
+
+        static bool GapOk(int[] o, int start)
+        {
+            for (int a = start - MinShapeGap; a < start; a++)
+                for (int b = start; b < start + MinShapeGap; b++)
+                    if (o[a] == o[b]) return false;
+            return true;
+        }
+
+        static uint Mix(uint h)
+        {
+            unchecked
+            {
+                h ^= h >> 16; h *= 0x7FEB352Du;
+                h ^= h >> 15; h *= 0x846CA68Bu;
+                h ^= h >> 16;
+                return h;
+            }
         }
 
         /// <summary>Shape name of a shape level ("heart"), null for a normal level.</summary>
@@ -78,8 +139,15 @@ namespace ArrowPuzzle
             return level % 3 == 0 ? -1 : level - level / 3 - 1;
         }
 
-        /// <summary>Global level of shape index s in round r: 3 * (r * 37 + s + 1).</summary>
-        public static int ShapeLevel(int shapeIndex, int round) { return 3 * (round * ShapeCount + shapeIndex + 1); }
+        /// <summary>Global level of shape index s in round r (round 0: 3 * (s + 1); rounds 1, 2: its shuffled slot). -1 if none.</summary>
+        public static int ShapeLevel(int shapeIndex, int round)
+        {
+            var o = Order();
+            int start = round * ShapeCount;
+            for (int k = start; k < start + ShapeCount && k < o.Length; k++)
+                if (o[k] == shapeIndex) return 3 * (k + 1);
+            return -1;
+        }
 
         /// <summary>The shape's round-0 level (its unlock level): 3 * (index + 1).</summary>
         public static int FirstLevel(int shapeIndex) { return ShapeLevel(shapeIndex, 0); }

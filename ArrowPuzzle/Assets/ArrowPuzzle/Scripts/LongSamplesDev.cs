@@ -102,11 +102,15 @@ namespace ArrowPuzzle
 
         public static void Started() { Pending = false; }
 
-        /// <summary>Next sample (wraps), used by PopupWin's NEXT.</summary>
-        public static void Next()
+        /// <summary>
+        /// Next sample, used by PopupWin's NEXT. False after the last one (no wrap: wrapping replayed sample 1, the
+        /// same board again); the caller then stops the route and plays the real level.
+        /// </summary>
+        public static bool Next()
         {
-            int c = Mathf.Max(1, Count);
-            Active = Active % c + 1;
+            if (Active >= Count) return false;
+            Active++;
+            return true;
         }
 
         public static void Stop()

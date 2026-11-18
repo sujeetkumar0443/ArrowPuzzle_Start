@@ -35,6 +35,8 @@ namespace ArrowPuzzle
                 return null;
             }
             data.longArrows = true;
+            Debug.Log("[Level] " + g + " seed=" + data.seed + " shape=" + (Campaign.ShapeOfLevel(g) ?? "board")
+                      + " grid=" + data.cols + "x" + data.rows + " arrows=" + data.pieces.Count + " file=" + file);
             return data;
         }
 

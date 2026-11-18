@@ -119,6 +119,8 @@ namespace ArrowPuzzle
                     }
                     cur = new Entry { expectedArrows = count };
                     cur.data = new LevelData { number = n, cols = cols, rows = rows, shape = parts[2], mask = new bool[cols, rows] };
+                    for (int i = 6; i < parts.Length; i++)
+                        if (parts[i].StartsWith("seed=")) int.TryParse(parts[i].Substring(5), out cur.data.seed);
                     d[n] = cur;
                 }
                 else if (cur == null)
@@ -162,7 +164,7 @@ namespace ArrowPuzzle
         {
             var c = new LevelData
             {
-                number = s.number, cols = s.cols, rows = s.rows, shape = s.shape,
+                number = s.number, cols = s.cols, rows = s.rows, shape = s.shape, seed = s.seed,
                 mask = s.mask != null ? (bool[,])s.mask.Clone() : null
             };
             foreach (var p in s.pieces)
