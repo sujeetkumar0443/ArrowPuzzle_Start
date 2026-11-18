@@ -7,6 +7,12 @@ namespace ArrowPuzzle
     /// <summary>Colours and sizes of the long-arrow renderer, all in one place (the theme system replaces this later).</summary>
     public static class LongStyle
     {
+        // ---- guide lines (Grid button: lines along the board cell edges), tune here
+        public const float GuideLineCells = 0.14f;     // width, cells (scales with the zoom)
+        public const float GuideLineAlpha = 0.26f;     // InkSoft at this alpha...
+        public const float GuideLineAlphaDark = 0.32f; // ...and this on dark themes (Night)
+        public const float GuideLineMinPx = 2f;        // never thinner than this on screen
+
         // ---- stroke shape, in cells (scales with the board and the zoom)
         public const float LineCells = 0.19f;      // line width
         public const float HeadCells = 0.62f;      // arrowhead length
@@ -20,9 +26,7 @@ namespace ArrowPuzzle
         public const float PressMul = 1.35f, HaloMul = 4f, HintGlowMul = 4.5f;
         public const float GlowMul = 3f, GlowAlpha = 0.22f; // theme Glow (night): soft copy under each static arrow
         public const bool BoardTiles = false;               // game board: no cell tiles (arrows on the screen background)
-        public const float GridPx = 1f;                     // touch grid line width, screen px at any zoom
-        public const float GridAlpha = 0.14f, GridAlphaDark = 0.2f; // touch grid: InkSoft at this alpha (dark themes: more)
-        public const float GridFadeIn = 0.08f, GridFadeOut = 0.25f; // s
+        public const float GridFadeIn = 0.15f, GridFadeOut = 0.25f; // s: guide lines on / off
         public const float DotCell = 0.11f, DotMinPx = 1.2f;        // board dot radius: cells, at least screen px
         public const float DotAlpha = 0.22f, DotAlphaDark = 0.28f;  // board dots: InkSoft at this alpha (dark themes: more)
         public const float DotFadeIn = 0.2f;                         // s: a dot appears once its cell is empty
@@ -38,13 +42,13 @@ namespace ArrowPuzzle
             }
         }
 
-        /// <summary>Touch grid colour for the current theme: InkSoft at GridAlpha (GridAlphaDark on dark themes: Night).</summary>
+        /// <summary>Guide line colour for the current theme: InkSoft at GuideLineAlpha (GuideLineAlphaDark on dark themes: Night).</summary>
         public static Color GridColor
         {
             get
             {
                 var c = Theme.InkSoft;
-                c.a = Theme.Current != null && Theme.Current.Dark ? GridAlphaDark : GridAlpha;
+                c.a = Theme.Current != null && Theme.Current.Dark ? GuideLineAlphaDark : GuideLineAlpha;
                 return c;
             }
         }
@@ -444,7 +448,7 @@ namespace ArrowPuzzle
     /// <summary>
     /// The edges of the mask cells (null mask = every cell) as thin lines, one mesh. An edge shared by two cells is drawn
     /// once and neighbouring edges on the same grid line are merged into one run, so the mesh stays small on dense
-    /// boards. width (board-local units) is set by LongArrowRenderer so the lines stay GridPx wide on screen.
+    /// boards. width (board-local units) is set by LongArrowRenderer: GuideLineCells, at least GuideLineMinPx on screen.
     /// </summary>
     [RequireComponent(typeof(CanvasRenderer))]
     public class GridGraphic : MaskableGraphic
@@ -863,7 +867,7 @@ namespace ArrowPuzzle
             // the shape scales with the cell (and so with the zoom); only the 1 px feather and the 2 px minimum are screen px
             line = Mathf.Max(LongStyle.LineCells * cell, LongStyle.LineMinPx / Mathf.Max(1e-4f, screenPerLocal));
             feather = LongStyle.FeatherPx / Mathf.Max(1e-4f, screenPerLocal);
-            grid.width = LongStyle.GridPx / Mathf.Max(1e-4f, screenPerLocal);
+            grid.width = Mathf.Max(LongStyle.GuideLineCells * cell, LongStyle.GuideLineMinPx / Mathf.Max(1e-4f, screenPerLocal));
             if (grid.gameObject.activeSelf) grid.Dirty(); // hidden: built with this width when it shows (OnEnable)
             // dots: 0.11 cell, at least DotMinPx on screen; the mesh is rebuilt only when that size really changed
             float r = Mathf.Max(LongStyle.DotCell * cell, LongStyle.DotMinPx / Mathf.Max(1e-4f, screenPerLocal));

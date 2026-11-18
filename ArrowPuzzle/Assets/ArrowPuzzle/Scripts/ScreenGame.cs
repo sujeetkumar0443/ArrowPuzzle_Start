@@ -9,13 +9,16 @@ namespace ArrowPuzzle
     {
         // header (design px from the safe-area top): pause 46 at y 24, LEVEL / MOVES in the centre, Skip right, hearts under
         const float Pad = 20f, TopY = 24f, PauseD = 46f, PauseR = 14f;
-        const float LevelY = 22f, LevelFontD = 13f, MovesY = 38f, MovesH = 50f, MovesFontD = 44f, MovesLabelD = 14f;
-        const float HeartsY = 92f, HeartD = 18f, HeartGap = 6f;
-        const float BoardTop = HeartsY + HeartD + 12f;      // 122: the board area starts under the hearts
+        // moves block, one centre line: centre y of "LEVEL n", the number, "MOVES"; top of the hearts row
+        const float LevelCY = 26f, LevelFontD = 13f, MovesCY = 54f, MovesBoxH = 56f, MovesFontD = 44f;
+        const float MovesLabelCY = 82f, MovesLabelD = 14f, MovesBoxW = 200f;
+        const float HeartsY = 94f, HeartD = 18f, HeartGap = 6f;
+        const float BoardTop = HeartsY + HeartD + 12f;      // 124: the board area starts under the hearts
         const float BoardSide = 10f;                        // board area side margin (no card any more)
         // bottom: two round 62 buttons side by side, centred; the hint count pill hangs below the Hint button
         const float BtnBottom = 40f, BtnH = 62f, BtnGapX = 30f, BadgeH = 20f, BadgeOver = 9f;
         const float GridRingD = 3f; // Grid button ON: Accent ring width
+        const float EyeIconD = 14f; // eye icon in the Grid button's state badge
         const float BoardGap = 12f;                         // between the buttons (with the badge) and the board area
         const float BoardBottom = BtnBottom + BtnH + BoardGap; // no banner
         const float CardPad = 4f;
@@ -42,7 +45,8 @@ namespace ArrowPuzzle
         const float ToastIn = 0.2f, ToastHold = 1.2f, ToastOut = 0.3f;
 
         // Skip pill (design px): right end of the chip band, 44 high
-        const float SkipH = 42f, SkipEdgeD = 3f, SkipFont = 17f, SkipIconD = 14f, SkipBadgeD = 22f, SkipWaitAlpha = 0.55f;
+        const float SkipH = 42f, SkipEdgeD = 3f, SkipFont = 20f, SkipIconD = 18f, SkipBadgeD = 24f, SkipBadgeFont = 14f;
+        const float SkipPadX = 14f, SkipGap = 6f, SkipWaitAlpha = 0.55f;
         const int SkipBonus = 2;
         const string SkipToast = "Ad not ready, try again";
         static readonly Color SkipGoldEdge = Theme.Hex("#C98410");
@@ -61,7 +65,6 @@ namespace ArrowPuzzle
         CanvasGroup skipGroup;
         RectTransform skipIconFill; // the play icon's sprite (not under the layout group: free to nudge)
         Image[] skipIcon;
-        Shimmer skipShimmer;
         float skipAttentionT0 = -100f, skipPressT0 = -100f;
         bool skipWaiting; // a Skip / +2 skips video is loading or playing: taps are ignored
         int skipRequest;  // bumped per request, so a late result can't act on a newer state
@@ -75,6 +78,8 @@ namespace ArrowPuzzle
         RectTransform area, card, hintRt, restartRt, gridRt;
         Image gridRing;                 // Accent ring behind the Grid button while the grid is on
         Graphic[] gridIcon;
+        Image gridBadge;                // eye pill hanging below the Grid button: open eye (ON) / crossed eye (OFF)
+        GameObject gridEyeOn, gridEyeOff;
         BoardZoom zoom;
         int level; // global level (LevelPath / Campaign)
         float btnBottom = BtnBottom, toastY = ToastY; // move up above the banner (ApplyBannerLayout)
@@ -294,19 +299,23 @@ namespace ArrowPuzzle
                                () => GameApp.I.Open("PopupPause"), Icon.Pause, 20f);
             Ui.PlaceD((RectTransform)pause.transform, Ui.TL, new Vector2(Pad, -TopY), new Vector2(PauseD, PauseD));
 
+            // one vertical stack on the screen's centre line: fixed-width boxes, centred text (no layout groups, so the
+            // block never moves when the number gets more digits); the number's pivot is its centre (pop scales there)
             levelText = Ui.Label(Root, "", LevelFontD, Theme.InkSoft, Weight.Semi);
-            Ui.PlaceD(levelText.rectTransform, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -LevelY), new Vector2(180f, 18f));
+            levelText.alignment = TextAnchor.MiddleCenter;
+            Ui.PlaceD(levelText.rectTransform, Ui.TC, Ui.C, new Vector2(0f, -LevelCY), new Vector2(MovesBoxW, 18f));
 
-            var movesRow = Ui.New(Root, "Moves");
-            Ui.PlaceD(movesRow, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -MovesY), new Vector2(180f, MovesH));
-            var row = Ui.Row(movesRow, 6f, TextAnchor.LowerCenter);
-            row.childForceExpandWidth = false;
-            movesText = Ui.Label(movesRow, "0", MovesFontD, Theme.Accent, Weight.Bold);
-            var movesLabel = Ui.Label(movesRow, "MOVES", MovesLabelD, Theme.InkSoft, Weight.Semi);
-            movesLabel.alignment = TextAnchor.LowerCenter;
-            movesLabel.gameObject.AddComponent<LayoutElement>().preferredHeight = Theme.D(MovesH * 0.62f);
+            movesText = Ui.Label(Root, "0", MovesFontD, Theme.Accent, Weight.Bold);
+            movesText.alignment = TextAnchor.MiddleCenter;
+            movesText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            movesText.verticalOverflow = VerticalWrapMode.Overflow;
+            Ui.PlaceD(movesText.rectTransform, Ui.TC, Ui.C, new Vector2(0f, -MovesCY), new Vector2(MovesBoxW, MovesBoxH));
 
-            // 3 hearts, centred under the moves
+            var movesLabel = Ui.Label(Root, "MOVES", MovesLabelD, Theme.InkSoft, Weight.Semi);
+            movesLabel.alignment = TextAnchor.MiddleCenter;
+            Ui.PlaceD(movesLabel.rectTransform, Ui.TC, Ui.C, new Vector2(0f, -MovesLabelCY), new Vector2(MovesBoxW, 18f));
+
+            // 3 hearts, centred under "MOVES"
             var hrow = Ui.New(Root, "Hearts");
             float w = HeartD * hearts.Length + HeartGap * (hearts.Length - 1);
             Ui.PlaceD(hrow, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -HeartsY), new Vector2(w, HeartD));
@@ -328,11 +337,13 @@ namespace ArrowPuzzle
         // ------------------------------------------------------------------ Skip level (rewarded, daily limit)
 
         /// <summary>
-        /// Small pill at the right end of the chip band, 44 high: teal, play icon, "Skip" and an ink badge with the skips
-        /// left; gold "+2 skips" (no badge) when none are left (RefreshSkip, also on Save.SkipsChanged).
+        /// Purple pill, 42 high, darker bottom edge, centred on the pause button's line, Pad from the right edge: double
+        /// chevron, "SKIP" and a white badge with the skips left (equal side padding); gold "+2 skips" (no badge) when
+        /// none are left (RefreshSkip, also on Save.SkipsChanged).
         /// </summary>
         void BuildSkip()
         {
+            // purple pill, darker bottom edge; one row, vertically centred: double chevron, "SKIP", the white count badge
             var b = Ui.Btn(Root, "SKIP", SkipPurple, Theme.OnColor, SkipFont, SkipH * 0.5f, SkipPurpleEdge, SkipEdgeD,
                            OnSkipTap, Icon.Skip, SkipIconD);
             skipRt = (RectTransform)b.transform;
@@ -343,11 +354,12 @@ namespace ArrowPuzzle
             if (squash != null) UnityEngine.Object.Destroy(squash);
             var iconRt = skipRt.Find("Icon_" + Icon.Skip);
             skipIcon = iconRt != null ? iconRt.GetComponentsInChildren<Image>() : new Image[0];
-            skipIconFill = skipIcon.Length > 0 ? skipIcon[0].rectTransform : null;
+            skipIconFill = iconRt != null ? iconRt.Find("fill") as RectTransform : null;
             var hlg = b.GetComponent<HorizontalLayoutGroup>();
-            hlg.spacing = Theme.D(6f);
-            int padL = Mathf.RoundToInt(Theme.D(12f)), padR = Mathf.RoundToInt(Theme.D(10f));
-            hlg.padding = new RectOffset(padL, padR, 0, 0);
+            hlg.childAlignment = TextAnchor.MiddleCenter;
+            hlg.spacing = Theme.D(SkipGap);
+            int pad = Mathf.RoundToInt(Theme.D(SkipPadX));
+            hlg.padding = new RectOffset(pad, pad, 0, 0); // equal left / right
             b.gameObject.AddComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
             skipImg = b.GetComponent<Image>();
             skipShadow = b.GetComponent<Shadow>();
@@ -356,10 +368,9 @@ namespace ArrowPuzzle
             skipBadge = Ui.Img(skipRt, "Badge", WinArt.Disc, Theme.OnColor);
             skipBadge.raycastTarget = false;
             Ui.Size(skipBadge, SkipBadgeD, SkipBadgeD);
-            skipBadgeText = Ui.Label(skipBadge.transform, "4", 13f, SkipPurple, Weight.Bold);
+            skipBadgeText = Ui.Label(skipBadge.transform, "4", SkipBadgeFont, SkipPurple, Weight.Bold);
+            skipBadgeText.alignment = TextAnchor.MiddleCenter;
             Ui.Fill(skipBadgeText.rectTransform);
-            // the soft shine (Ui.AddShimmer: white streak, skewed -20 deg, clipped to the pill); paused while stopped
-            skipShimmer = Ui.AddShimmer(skipRt, SkipH * 0.5f);
             skipGroup = b.gameObject.AddComponent<CanvasGroup>();
         }
 
@@ -441,8 +452,8 @@ namespace ArrowPuzzle
         /// <summary>
         /// Every frame from TimerLoop (unscaled): the first-attention bounce 1 s after the level starts (1 -> 1.18 -> 1
         /// over 0.5 s), then the soft pulse (1 -> 1.06 -> 1 every 1.4 s, ease in-out) with the play icon nudging 2 px
-        /// right and back, the shine sweep, and the press dip (0.94 for 0.08 s, then back). All stop (at rest, no
-        /// shine) while the video loads, an arrow is moving, or the board is finished / locked; the press dip still shows.
+        /// right and back, and the press dip (0.94 for 0.08 s, then back). All stop (at rest)
+        /// while the video loads, an arrow is moving, or the board is finished / locked; the press dip still shows.
         /// </summary>
         void ApplySkipAnim()
         {
@@ -466,7 +477,6 @@ namespace ArrowPuzzle
             if (pr >= 0f && pr < 2f) s *= Mathf.Lerp(1f, SkipPressScale, pr < 1f ? pr : 2f - pr);
             skipRt.localScale = new Vector3(s, s, 1f);
             if (skipIconFill != null) skipIconFill.anchoredPosition = new Vector2(Theme.D(SkipNudge * p), 0f);
-            if (skipShimmer != null && skipShimmer.enabled == stopped) skipShimmer.enabled = !stopped;
         }
 
         /// <summary>Back at rest (leaving the screen).</summary>
@@ -528,6 +538,19 @@ namespace ArrowPuzzle
             gridRing.transform.SetAsFirstSibling();
             var icon = grid.transform.Find("Icon_" + Icon.Grid);
             gridIcon = icon != null ? icon.GetComponentsInChildren<Graphic>(true) : new Graphic[0];
+
+            // state badge: a small pill hanging below the button, like the Hint count (ON: Accent + open eye,
+            // OFF: Panel + crossed eye)
+            gridBadge = ScreenKit.Rounded(grid.transform, "EyeBadge", Theme.Panel, BadgeH * 0.5f);
+            gridBadge.raycastTarget = false;
+            gridBadge.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            Ui.PlaceD(gridBadge.rectTransform, Ui.BC, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(30f, BadgeH));
+            var eyeOn = Icons.Make(gridBadge.transform, Icon.Eye, Theme.AccentText, EyeIconD);
+            Ui.PlaceD(eyeOn, Ui.C, Vector2.zero, new Vector2(EyeIconD, EyeIconD));
+            var eyeOff = Icons.Make(gridBadge.transform, Icon.EyeOff, Theme.PanelText, EyeIconD);
+            Ui.PlaceD(eyeOff, Ui.C, Vector2.zero, new Vector2(EyeIconD, EyeIconD));
+            gridEyeOn = eyeOn.gameObject;
+            gridEyeOff = eyeOff.gameObject;
             SetGridLook(Save.Grid);
         }
 
@@ -543,6 +566,9 @@ namespace ArrowPuzzle
         {
             if (gridRing != null) gridRing.gameObject.SetActive(on);
             if (gridIcon != null) foreach (var g in gridIcon) g.color = on ? Theme.Accent : Theme.Ink;
+            if (gridBadge != null) gridBadge.color = on ? Theme.Accent : Theme.Panel;
+            if (gridEyeOn != null) gridEyeOn.SetActive(on);
+            if (gridEyeOff != null) gridEyeOff.SetActive(!on);
         }
 
         // ------------------------------------------------------------------ banner

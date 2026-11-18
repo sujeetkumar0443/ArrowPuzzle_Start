@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ArrowPuzzle
 {
-    public enum Icon { Bulb, Star, Heart, Gear, Back, Pause, Restart, Home, Play, Sound, Vibrate, Lock, ArrowRight, Share, Shield, Chevron, Music, Check, Skip, Palette, Grid }
+    public enum Icon { Bulb, Star, Heart, Gear, Back, Pause, Restart, Home, Play, Sound, Vibrate, Lock, ArrowRight, Share, Shield, Chevron, Music, Check, Skip, Palette, Grid, Eye, EyeOff }
 
     /// <summary>
     /// Icons drawn in code (stroke polylines or generated sprites), copied from the design's 24x24 icon set.
@@ -112,15 +112,19 @@ namespace ArrowPuzzle
                     Stroke(rt, color, 2.6f, s, P(9, 5), P(16, 12), P(9, 19));
                     break;
 
-                case Icon.Skip: // play triangle + bar (Images, so tinting the Images recolours it)
+                case Icon.Skip: // double chevron: two right triangles in a "fill" child (Images: tinting recolours, the child can nudge)
                 {
-                    var tri = Ui.Img(rt, "fill", Theme.Triangle, color);
-                    tri.raycastTarget = false;
-                    var trt = tri.rectTransform;
-                    trt.anchorMin = new Vector2(0.1f, 0.2f);
-                    trt.anchorMax = new Vector2(0.66f, 0.8f);
-                    trt.offsetMin = trt.offsetMax = Vector2.zero;
-                    Rect(rt, 16.5f, 5f, 3.2f, 14f, 1.2f, color, sizeD);
+                    var fill = Ui.New(rt, "fill");
+                    Ui.Fill(fill);
+                    for (int k = 0; k < 2; k++)
+                    {
+                        var tri = Ui.Img(fill, "tri" + k, Theme.Triangle, color);
+                        tri.raycastTarget = false;
+                        var trt = tri.rectTransform;
+                        trt.anchorMin = new Vector2(0.04f + 0.44f * k, 0.16f);
+                        trt.anchorMax = new Vector2(0.52f + 0.44f * k, 0.84f);
+                        trt.offsetMin = trt.offsetMax = Vector2.zero;
+                    }
                     break;
                 }
 
@@ -136,6 +140,18 @@ namespace ArrowPuzzle
                     Rect(rt, 7.2f, 7.6f, 3.4f, 3.4f, 1.7f, color, sizeD);
                     Rect(rt, 12.6f, 6.4f, 3.4f, 3.4f, 1.7f, color, sizeD);
                     Rect(rt, 14.4f, 11.6f, 3.4f, 3.4f, 1.7f, color, sizeD);
+                    break;
+                }
+
+                case Icon.Eye:    // open eye: almond outline and a pupil
+                case Icon.EyeOff: // the same, crossed out
+                {
+                    var lid = Arc(12, 21, 13, 46f, 134f, 12);   // upper lid
+                    var low = Arc(12, 3, 13, 226f, 314f, 12);   // lower lid
+                    Stroke(rt, color, 2.2f, s, lid);
+                    Stroke(rt, color, 2.2f, s, low);
+                    Rect(rt, 9, 9, 6, 6, 3, color, sizeD);
+                    if (icon == Icon.EyeOff) Stroke(rt, color, 2.4f, s, P(4, 20), P(20, 4));
                     break;
                 }
 
