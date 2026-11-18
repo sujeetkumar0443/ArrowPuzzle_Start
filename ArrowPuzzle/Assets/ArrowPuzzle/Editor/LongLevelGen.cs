@@ -10,10 +10,149 @@ using System.Text;
 // Coordinates here are FILE coordinates: cell index = r * cols + c, r = 0 is the top row (like shapes.txt).
 namespace ArrowPuzzle
 {
-    /// <summary>Implicit shape functions, normalized coords, x right, y DOWN.</summary>
+    /// <summary>
+    /// Shape registry: name -> inside(x, y), normalized coords, x right, y DOWN. The 9 built-in shapes are coded below;
+    /// the rest come from ShapeDefs.txt (DSL, see ParseDefs). All lists every name: built-ins first, then the file's order.
+    /// </summary>
     public static class LongShapes
     {
-        public static readonly string[] All = { "heart", "hourglass", "paw", "cat", "bunny", "star", "fish", "house", "tree" };
+        public static readonly string[] BuiltIn = { "heart", "hourglass", "paw", "cat", "bunny", "star", "fish", "house", "tree" };
+
+        /// <summary>The DSL file, relative to the Unity project folder.</summary>
+        public const string DefsFile = "Assets/ArrowPuzzle/Editor/ShapeDefs.txt";
+
+        sealed class Op
+        {
+            public bool add;
+            public char kind;            // 'E' ellipse, 'R' rectangle, 'P' polygon
+            public double cx, cy, a, b, cos, sin;
+            public double[] poly;
+        }
+
+        static Dictionary<string, List<Op>> defs;
+        static readonly List<string> all = new List<string>();
+
+        /// <summary>Every shape name (built-ins + ShapeDefs.txt). Loads the file from the current folder if not loaded yet.</summary>
+        public static List<string> All
+        {
+            get
+            {
+                if (defs == null) LoadDefs(Directory.GetCurrentDirectory());
+                return all;
+            }
+        }
+
+        /// <summary>(Re)loads ShapeDefs.txt from projectRoot (the Unity project folder).</summary>
+        public static void LoadDefs(string projectRoot)
+        {
+            defs = ParseDefs(File.ReadAllText(Path.Combine(projectRoot, DefsFile)));
+            all.Clear();
+            all.AddRange(BuiltIn);
+            foreach (var kv in defOrder) all.Add(kv);
+        }
+
+        static readonly List<string> defOrder = new List<string>();
+
+        /// <summary>
+        /// "shape NAME" ... "end" blocks; each line is one operation applied in order to a boolean state:
+        /// "+" adds (state OR inside), "-" subtracts (state AND NOT inside). Primitives:
+        ///   E cx cy rx ry rot   ellipse, rot in degrees
+        ///   R cx cy w h rot     rectangle
+        ///   P x,y x,y ...       polygon
+        /// Rotation: dx = x - cx, dy = y - cy, u = dx cos(a) + dy sin(a), w = -dx sin(a) + dy cos(a).
+        /// Blank lines and lines starting with # are ignored.
+        /// </summary>
+        static Dictionary<string, List<Op>> ParseDefs(string text)
+        {
+            var res = new Dictionary<string, List<Op>>();
+            defOrder.Clear();
+            string cur = null;
+            List<Op> ops = null;
+            var lines = text.Replace("\r", "").Split('\n');
+            for (int n = 0; n < lines.Length; n++)
+            {
+                string line = lines[n].Trim();
+                if (line.Length == 0 || line[0] == '#') continue;
+                string where = "ShapeDefs.txt line " + (n + 1) + ": ";
+                if (line.StartsWith("shape "))
+                {
+                    if (cur != null) throw new FormatException(where + "'shape' inside '" + cur + "' (missing 'end')");
+                    cur = line.Substring(6).Trim();
+                    if (cur.Length == 0 || cur.Contains(" ")) throw new FormatException(where + "bad shape name");
+                    if (res.ContainsKey(cur) || Array.IndexOf(BuiltIn, cur) >= 0) throw new FormatException(where + "duplicate shape " + cur);
+                    ops = new List<Op>();
+                    continue;
+                }
+                if (line == "end")
+                {
+                    if (cur == null) throw new FormatException(where + "'end' without 'shape'");
+                    if (ops.Count == 0) throw new FormatException(where + "shape " + cur + " is empty");
+                    res[cur] = ops;
+                    defOrder.Add(cur);
+                    cur = null;
+                    continue;
+                }
+                if (cur == null) throw new FormatException(where + "operation outside a shape");
+                if (line.Length < 3 || (line[0] != '+' && line[0] != '-')) throw new FormatException(where + "expected + or -");
+                var op = new Op { add = line[0] == '+', kind = line[1] };
+                var parts = line.Substring(2).Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (op.kind == 'E' || op.kind == 'R')
+                {
+                    if (parts.Length != 5) throw new FormatException(where + op.kind + " needs cx cy a b rot");
+                    var v = new double[5];
+                    for (int i = 0; i < 5; i++) v[i] = Num(parts[i], where);
+                    op.cx = v[0]; op.cy = v[1]; op.a = v[2]; op.b = v[3];
+                    double rad = v[4] * Math.PI / 180.0;
+                    op.cos = Math.Cos(rad);
+                    op.sin = Math.Sin(rad);
+                    if (op.a <= 0 || op.b <= 0) throw new FormatException(where + "sizes must be > 0");
+                }
+                else if (op.kind == 'P')
+                {
+                    if (parts.Length < 3) throw new FormatException(where + "a polygon needs at least 3 points");
+                    op.poly = new double[parts.Length * 2];
+                    for (int i = 0; i < parts.Length; i++)
+                    {
+                        var xy = parts[i].Split(',');
+                        if (xy.Length != 2) throw new FormatException(where + "bad point '" + parts[i] + "'");
+                        op.poly[2 * i] = Num(xy[0], where);
+                        op.poly[2 * i + 1] = Num(xy[1], where);
+                    }
+                }
+                else throw new FormatException(where + "unknown primitive '" + op.kind + "'");
+                ops.Add(op);
+            }
+            if (cur != null) throw new FormatException("ShapeDefs.txt: shape " + cur + " has no 'end'");
+            return res;
+        }
+
+        static double Num(string s, string where)
+        {
+            double v;
+            if (!double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v))
+                throw new FormatException(where + "bad number '" + s + "'");
+            return v;
+        }
+
+        static bool Eval(List<Op> ops, double x, double y)
+        {
+            bool state = false;
+            foreach (var op in ops)
+            {
+                if (op.add == state) continue; // + on an inside point / - on an outside point: no change
+                bool inside;
+                if (op.kind == 'P') inside = Pip(op.poly, x, y);
+                else
+                {
+                    double dx = x - op.cx, dy = y - op.cy;
+                    double u = dx * op.cos + dy * op.sin, w = -dx * op.sin + dy * op.cos;
+                    if (op.kind == 'E') { double p = u / op.a, q = w / op.b; inside = p * p + q * q <= 1; }
+                    else inside = Math.Abs(u) <= op.a * 0.5 && Math.Abs(w) <= op.b * 0.5;
+                }
+                if (inside) state = op.add;
+            }
+            return state;
+        }
 
         public static double Scale(string shape)
         {
@@ -97,14 +236,17 @@ namespace ArrowPuzzle
                     return Ell(x, y, 0, .46, .56, .5) || Ell(x, y, -.27, -.34, .15, .52) || Ell(x, y, .27, -.34, .15, .52);
                 case "star":
                     return Pip(StarPoly, x, y);
-                case "fish":
-                    return Ell(x, y, -.18, 0, .66, .38) || Pip(FishTail, x, y);
+                case "fish": // the neck ellipse joins the tail to the body (at least 3 cells wide)
+                    return Ell(x, y, -.18, 0, .66, .38) || Ell(x, y, .34, 0, .2, .2) || Pip(FishTail, x, y);
                 case "house":
                     return (Math.Abs(x) <= .55 && y >= -.12 && y <= .72) || Pip(Roof, x, y);
                 case "tree":
                     return Ell(x, y, 0, -.42, .46, .4) || Ell(x, y, -.3, -.08, .4, .34) || Ell(x, y, .3, -.08, .4, .34)
                            || (Math.Abs(x) <= .1 && y >= .15 && y <= .78);
             }
+            if (defs == null) LoadDefs(Directory.GetCurrentDirectory());
+            List<Op> ops;
+            if (defs.TryGetValue(shape, out ops)) return Eval(ops, x, y);
             throw new ArgumentException("Unknown shape " + shape);
         }
     }
@@ -212,7 +354,81 @@ namespace ArrowPuzzle
             for (int r = 0; r < rows; r++)
                 for (int c = 0; c < cols; c++)
                     mask[r * cols + c] = LongShapes.Inside(shape, cx + (c + 0.5 - cols / 2.0) / sc, cy + (r + 0.5 - rows / 2.0) / sc);
+            int dropped = DropSmallGroups(mask, cols, rows, MinGroup);
+            if (dropped > 0)
+            {
+                string key = shape + "@" + d.ToString(CultureInfo.InvariantCulture);
+                if (warned.Add(key)) Warn("Long levels: " + shape + " d=" + d.ToString(CultureInfo.InvariantCulture)
+                                          + ": dropped " + dropped + " cell(s) in groups under " + MinGroup + " cells");
+            }
             return mask;
+        }
+
+        public const int MinGroup = 6; // isolated mask groups smaller than this are dropped
+
+        /// <summary>Where mask warnings go (Debug.LogWarning in the Editor; the console outside Unity).</summary>
+        public static Action<string> Warn = s => Console.WriteLine("WARNING " + s);
+        static readonly HashSet<string> warned = new HashSet<string>(); // once per shape and d (not per retry)
+
+        /// <summary>Removes 4-connected mask groups of fewer than min cells. Returns the number of cells removed.</summary>
+        public static int DropSmallGroups(bool[] mask, int cols, int rows, int min)
+        {
+            var seen = new bool[mask.Length];
+            var group = new List<int>();
+            var stack = new Stack<int>();
+            int removed = 0;
+            for (int s = 0; s < mask.Length; s++)
+            {
+                if (!mask[s] || seen[s]) continue;
+                group.Clear();
+                stack.Push(s);
+                seen[s] = true;
+                while (stack.Count > 0)
+                {
+                    int cell = stack.Pop();
+                    group.Add(cell);
+                    for (int k = 0; k < 4; k++)
+                    {
+                        int nb = Step(cell, k, cols, rows);
+                        if (nb >= 0 && mask[nb] && !seen[nb]) { seen[nb] = true; stack.Push(nb); }
+                    }
+                }
+                if (group.Count >= min) continue;
+                foreach (int cell in group) mask[cell] = false;
+                removed += group.Count;
+            }
+            return removed;
+        }
+
+        /// <summary>
+        /// % of mask cells in parts only 1-2 cells wide: cells not covered by any 3 x 3 block that lies fully inside the
+        /// mask (a morphological opening with a 3 x 3 square removes them).
+        /// </summary>
+        public static double ThinPct(bool[] mask, int cols, int rows)
+        {
+            var thick = new bool[mask.Length];
+            for (int r = 0; r + 2 < rows; r++)
+            {
+                for (int c = 0; c + 2 < cols; c++)
+                {
+                    bool full = true;
+                    for (int y = 0; y < 3 && full; y++)
+                        for (int x = 0; x < 3 && full; x++)
+                            full = mask[(r + y) * cols + c + x];
+                    if (!full) continue;
+                    for (int y = 0; y < 3; y++)
+                        for (int x = 0; x < 3; x++)
+                            thick[(r + y) * cols + c + x] = true;
+                }
+            }
+            int n = 0, thin = 0;
+            for (int i = 0; i < mask.Length; i++)
+            {
+                if (!mask[i]) continue;
+                n++;
+                if (!thick[i]) thin++;
+            }
+            return n == 0 ? 0 : 100.0 * thin / n;
         }
 
         // ------------------------------------------------------------------ quality gates
@@ -227,6 +443,20 @@ namespace ArrowPuzzle
         {
             return l.Solvable && l.FreePct >= MinFreePct(l.D) && l.FreePct <= MaxFreePct(l.D) && l.Depth >= MinDepth(l.D)
                    && l.AvgLen >= MinAvgLen(l.D) && l.Splits <= MaxSplitsGate(l.D);
+        }
+
+        /// <summary>The quality gates the level misses, e.g. "free 44.1>40; avg 12.3<15", or "-" when it passes them all.</summary>
+        public static string GateFailures(LongLevel l)
+        {
+            var f = new List<string>();
+            var ic = CultureInfo.InvariantCulture;
+            if (!l.Solvable) f.Add("unsolvable");
+            if (l.FreePct < MinFreePct(l.D)) f.Add(string.Format(ic, "free {0:0.0}<{1:0}", l.FreePct, MinFreePct(l.D)));
+            if (l.FreePct > MaxFreePct(l.D)) f.Add(string.Format(ic, "free {0:0.0}>{1:0}", l.FreePct, MaxFreePct(l.D)));
+            if (l.Depth < MinDepth(l.D)) f.Add("depth " + l.Depth + "<" + MinDepth(l.D));
+            if (l.AvgLen < MinAvgLen(l.D)) f.Add(string.Format(ic, "avg {0:0.0}<{1:0.#}", l.AvgLen, MinAvgLen(l.D)));
+            if (l.Splits > MaxSplitsGate(l.D)) f.Add("splits " + l.Splits + ">" + MaxSplitsGate(l.D));
+            return f.Count == 0 ? "-" : string.Join("; ", f.ToArray());
         }
 
         static double Penalty(LongLevel l)
@@ -897,6 +1127,76 @@ namespace ArrowPuzzle
             File.WriteAllText(Path.Combine(dir, "summary.txt"), summary.ToString());
             return levels;
         }
+
+        // ------------------------------------------------------------------ all shapes (previews only)
+
+        public const string AllDir = "LongPreview/all";
+        public static readonly double[] AllDs = { 1.0, 0.5 };
+
+        /// <summary>Seed base per shape index and d (fixed, so a rerun gives the same levels).</summary>
+        public static int AllSeed(int shapeIndex, double d) { return 20001 + shapeIndex * 1000 + (d >= 1.0 ? 0 : 500); }
+
+        /// <summary>
+        /// Every registered shape at every d in AllDs: PNG per level in LongPreview/all, the d = 1 contact sheet
+        /// (sheet_d1.png) and summary_all.txt. verify = the game's peel test on level text (ShapeLevels.VerifyText):
+        /// level number -> null when valid, else the problem. Nothing is written to Resources.
+        /// </summary>
+        public static List<LongLevel> RunAll(string projectRoot, Action<string, float> progress,
+                                             Func<string, IDictionary<int, string>> verify, out string summaryText)
+        {
+            LongShapes.LoadDefs(projectRoot);
+            var names = LongShapes.All;
+            var levels = new List<LongLevel>();
+            int total = names.Count * AllDs.Length, k = 0;
+            for (int i = 0; i < names.Count; i++)
+            {
+                foreach (double d in AllDs)
+                {
+                    if (progress != null) progress(names[i] + " d=" + d.ToString(CultureInfo.InvariantCulture), k++ / (float)total);
+                    levels.Add(LongLevelGen.Generate(names[i], d, AllSeed(i, d)));
+                }
+            }
+
+            var check = verify != null ? verify(LongLevelGen.ToText(levels)) : null;
+
+            string dir = Path.Combine(projectRoot, AllDir);
+            Directory.CreateDirectory(dir);
+            foreach (var old in Directory.GetFiles(dir)) File.Delete(old);
+            var sheet = new List<LongLevel>();
+            for (int i = 0; i < levels.Count; i++)
+            {
+                var l = levels[i];
+                File.WriteAllBytes(Path.Combine(dir, l.Shape + "_" + DTag(l.D) + ".png"), LongPreview.Png(l, 20));
+                if (l.D >= 1.0) sheet.Add(l);
+            }
+            File.WriteAllBytes(Path.Combine(dir, "sheet_d1.png"), LongPreview.Sheet(sheet, 7));
+
+            var ic = CultureInfo.InvariantCulture;
+            var sb = new StringBuilder();
+            sb.Append(string.Format(ic, "{0,-11} {1,-4} {2,-6} {3,5} {4,6} {5,9} {6,6} {7,5} {8,6} {9,10} {10,6} {11,6} {12,-5} {13}\n",
+                "shape", "d", "grid", "cells", "arrows", "avg/max", "free%", "depth", "splits", "seed(try)", "thin%", "ms", "peel", "gates failed"));
+            int pass = 0, gatesOk = 0;
+            for (int i = 0; i < levels.Count; i++)
+            {
+                var l = levels[i];
+                string err = null;
+                bool ok = check != null && check.TryGetValue(i + 1, out err) && err == null;
+                if (ok) pass++;
+                string gates = LongLevelGen.GateFailures(l);
+                if (gates == "-") gatesOk++;
+                sb.Append(string.Format(ic, "{0,-11} {1,-4} {2,-6} {3,5} {4,6} {5,9} {6,6:0.0} {7,5} {8,6} {9,10} {10,6:0.0} {11,6:0} {12,-5} {13}\n",
+                    l.Shape, l.D.ToString("0.0#", ic), l.Cols + "x" + l.Rows, l.MaskCells, l.Count,
+                    l.AvgLen.ToString("0.0", ic) + "/" + l.MaxLen, l.FreePct, l.Depth, l.Splits,
+                    l.Seed + "(" + l.Tries + ")", LongLevelGen.ThinPct(l.Mask, l.Cols, l.Rows), l.Ms,
+                    check == null ? "?" : ok ? "PASS" : "FAIL", gates + (ok || check == null ? "" : " | peel: " + (err ?? "missing"))));
+            }
+            sb.Append(string.Format(ic, "\n{0} levels: peel test {1}/{0} PASS, quality gates met {2}/{0}\n", levels.Count, pass, gatesOk));
+            summaryText = sb.ToString();
+            File.WriteAllText(Path.Combine(dir, "summary_all.txt"), summaryText);
+            return levels;
+        }
+
+        static string DTag(double d) { return "d" + d.ToString("0.##", CultureInfo.InvariantCulture).Replace(".", ""); }
     }
 
     /// <summary>
@@ -909,38 +1209,129 @@ namespace ArrowPuzzle
 
         public static byte[] Png(LongLevel l, int cellPx)
         {
-            int w = l.Cols * cellPx + 2 * Margin, h = l.Rows * cellPx + 2 * Margin;
+            int w, h;
+            var img = Render(l, cellPx, Margin, 1.0, out w, out h);
+            return Encode(w, h, img);
+        }
+
+        /// <summary>The preview as an RGB buffer (0..1), w x h px; lineHw = half line width in px.</summary>
+        static double[] Render(LongLevel l, int cellPx, int margin, double lineHw, out int w, out int h)
+        {
+            w = l.Cols * cellPx + 2 * margin;
+            h = l.Rows * cellPx + 2 * margin;
             var img = new double[w * h * 3]; // double, not float: Mono and .NET round float intermediates differently
             for (int i = 0; i < img.Length; i++) img[i] = 1.0;
 
+            int inset = cellPx >= 8 ? 1 : 0;
             for (int r = 0; r < l.Rows; r++)
                 for (int c = 0; c < l.Cols; c++)
                     if (l.Mask[r * l.Cols + c])
-                        for (int y = 1; y < cellPx - 1; y++)
-                            for (int x = 1; x < cellPx - 1; x++)
-                                Blend(img, w, h, Margin + c * cellPx + x, Margin + r * cellPx + y, 0.945, 0.945, 0.945, 1.0);
+                        for (int y = inset; y < cellPx - inset; y++)
+                            for (int x = inset; x < cellPx - inset; x++)
+                                Blend(img, w, h, margin + c * cellPx + x, margin + r * cellPx + y, 0.945, 0.945, 0.945, 1.0);
 
             for (int i = 0; i < l.Count; i++)
             {
                 bool free = l.FreeAtStart != null && l.FreeAtStart[i];
                 double cr = free ? 0.10 : 0, cg = free ? 0.62 : 0, cb = free ? 0.25 : 0;
                 var a = l.Arrows[i];
+                if (a.Count < 2) continue;
                 var pts = new List<double[]>();
                 foreach (int cell in a)
-                    pts.Add(new[] { Margin + (cell % l.Cols + 0.5) * cellPx, Margin + (cell / l.Cols + 0.5) * cellPx });
+                    pts.Add(new[] { margin + (cell % l.Cols + 0.5) * cellPx, margin + (cell / l.Cols + 0.5) * cellPx });
                 var hp = pts[pts.Count - 1];
                 var pp = pts[pts.Count - 2];
                 double dx = hp[0] - pp[0], dy = hp[1] - pp[1], len = Math.Sqrt(dx * dx + dy * dy);
                 dx /= len; dy /= len;
-                for (int j = 1; j < pts.Count; j++) Segment(img, w, h, pts[j - 1], pts[j], 1.0, cr, cg, cb);
+                for (int j = 1; j < pts.Count; j++) Segment(img, w, h, pts[j - 1], pts[j], lineHw, cr, cg, cb);
                 double hs = cellPx;
                 var apex = new[] { hp[0] + dx * 0.42 * hs, hp[1] + dy * 0.42 * hs };
                 var bc = new[] { hp[0] - dx * 0.06 * hs, hp[1] - dy * 0.06 * hs };
                 double hw = 0.24 * hs;
                 Triangle(img, w, h, apex, new[] { bc[0] - dy * hw, bc[1] + dx * hw }, new[] { bc[0] + dy * hw, bc[1] - dx * hw }, cr, cg, cb);
             }
+            return img;
+        }
+
+        // ------------------------------------------------------------------ contact sheet
+
+        const int ThumbW = 186, ThumbH = 280, LabelH = 26, Gap = 10, TextScale = 2;
+
+        /// <summary>All levels as thumbnails in a grid of columns, each with its shape name under it.</summary>
+        public static byte[] Sheet(IList<LongLevel> levels, int columns)
+        {
+            int rowsN = (levels.Count + columns - 1) / columns;
+            int cw = ThumbW + Gap, ch = ThumbH + LabelH + Gap;
+            int w = columns * cw + Gap, h = rowsN * ch + Gap;
+            var img = new double[w * h * 3];
+            for (int i = 0; i < img.Length; i++) img[i] = 0.86;
+            for (int n = 0; n < levels.Count; n++)
+            {
+                var l = levels[n];
+                int ox = Gap + (n % columns) * cw, oy = Gap + (n / columns) * ch;
+                Fill(img, w, ox, oy, ThumbW, ThumbH + LabelH, 1.0);
+                const int pad = 4;
+                int cell = Math.Max(2, Math.Min((ThumbW - 2 * pad) / l.Cols, (ThumbH - 2 * pad) / l.Rows));
+                int tw, th;
+                var t = Render(l, cell, pad, cell >= 6 ? 0.6 : 0.45, out tw, out th);
+                int tx = ox + (ThumbW - tw) / 2, ty = oy + (ThumbH - th) / 2;
+                for (int y = 0; y < th; y++)
+                    for (int x = 0; x < tw; x++)
+                    {
+                        int px = tx + x, py = ty + y;
+                        if (px < ox || py < oy || px >= ox + ThumbW || py >= oy + ThumbH) continue;
+                        int si = (y * tw + x) * 3, di = (py * w + px) * 3;
+                        img[di] = t[si]; img[di + 1] = t[si + 1]; img[di + 2] = t[si + 2];
+                    }
+                string label = l.Shape.ToUpperInvariant();
+                int textW = label.Length * 6 * TextScale - TextScale;
+                Text(img, w, h, ox + (ThumbW - textW) / 2, oy + ThumbH + (LabelH - 7 * TextScale) / 2, label, TextScale);
+            }
             return Encode(w, h, img);
         }
+
+        static void Fill(double[] img, int w, int x0, int y0, int fw, int fh, double v)
+        {
+            for (int y = y0; y < y0 + fh; y++)
+                for (int x = x0; x < x0 + fw; x++)
+                {
+                    int i = (y * w + x) * 3;
+                    img[i] = img[i + 1] = img[i + 2] = v;
+                }
+        }
+
+        /// <summary>Text in a 5 x 7 pixel font (A-Z, space), each font pixel scale x scale, dark grey.</summary>
+        static void Text(double[] img, int w, int h, int x0, int y0, string s, int scale)
+        {
+            for (int k = 0; k < s.Length; k++)
+            {
+                int gi = s[k] >= 'A' && s[k] <= 'Z' ? s[k] - 'A' : -1;
+                if (gi < 0) continue;
+                string g = Glyphs[gi];
+                for (int row = 0; row < 7; row++)
+                    for (int col = 0; col < 5; col++)
+                    {
+                        if (g[row * 5 + col] != '#') continue;
+                        for (int sy = 0; sy < scale; sy++)
+                            for (int sx = 0; sx < scale; sx++)
+                                Blend(img, w, h, x0 + (k * 6 + col) * scale + sx, y0 + row * scale + sy, 0.15, 0.15, 0.15, 1.0);
+                    }
+            }
+        }
+
+        // 5 x 7 glyphs A-Z, rows top to bottom
+        static readonly string[] Glyphs =
+        {
+            ".###.#...##...#######...##...##...#", "####.#...##...#####.#...##...#####.", ".###.#...##....#....#....#...#.###.",
+            "####.#...##...##...##...##...#####.", "######....#....####.#....#....#####", "######....#....####.#....#....#....",
+            ".###.#...##....#.####...##...#.###.", "#...##...##...#######...##...##...#", ".###...#....#....#....#....#...###.",
+            "..###...#....#....#....#.#..#..##..", "#...##..#.#.#..##...#.#..#..#.#...#", "#....#....#....#....#....#....#####",
+            "#...###.###.#.##.#.##...##...##...#", "#...##...###..##.#.##..###...##...#", ".###.#...##...##...##...##...#.###.",
+            "####.#...##...#####.#....#....#....", ".###.#...##...##...##.#.##..#..##.#", "####.#...##...#####.#.#..#..#.#...#",
+            ".#####....#.....###.....#....#####.", "#####..#....#....#....#....#....#..", "#...##...##...##...##...##...#.###.",
+            "#...##...##...##...##...#.#.#...#..", "#...##...##...##.#.##.#.##.#.#.#.#.", "#...##...#.#.#...#...#.#.#...##...#",
+            "#...##...#.#.#...#....#....#....#..", "#####....#...#...#...#...#....#####",
+        };
 
         static void Blend(double[] img, int w, int h, int x, int y, double r, double g, double b, double a)
         {

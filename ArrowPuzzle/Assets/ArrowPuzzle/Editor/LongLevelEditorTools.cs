@@ -12,10 +12,35 @@ namespace ArrowPuzzle
     /// </summary>
     public static class LongLevelEditorTools
     {
+        [MenuItem("Arrow/Long Levels/Generate All Shapes Preview")]
+        static void GenerateAllShapes()
+        {
+            string root = Path.GetDirectoryName(Application.dataPath);
+            LongLevelGen.Warn = s => Debug.LogWarning(s);
+            string summary;
+            System.Collections.Generic.List<LongLevel> levels;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                levels = LongSamples.RunAll(root, (what, p) => EditorUtility.DisplayProgressBar("Long levels: all shapes", what, p),
+                                            text => ShapeLevels.VerifyText(text), out summary);
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+            string head = "Long levels: " + levels.Count + " previews in " + (sw.ElapsedMilliseconds / 1000f).ToString("F1") + " s -> "
+                          + Path.Combine(root, LongSamples.AllDir) + " (sheet_d1.png, summary_all.txt)\n";
+            if (summary.Contains(" FAIL ")) Debug.LogError(head + summary);
+            else Debug.Log(head + summary);
+        }
+
         [MenuItem("Arrow/Long Levels/Generate Samples")]
         static void GenerateSamples()
         {
             string root = Path.GetDirectoryName(Application.dataPath);
+            LongLevelGen.Warn = s => Debug.LogWarning(s);
+            LongShapes.LoadDefs(root);
             string text;
             System.Collections.Generic.List<LongLevel> levels;
             try
