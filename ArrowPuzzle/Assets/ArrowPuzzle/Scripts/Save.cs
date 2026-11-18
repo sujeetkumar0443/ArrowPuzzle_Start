@@ -214,13 +214,6 @@ namespace ArrowPuzzle
             set { PlayerPrefs.SetInt("ap_haptics", value ? 1 : 0); PlayerPrefs.Save(); }
         }
 
-        /// <summary>Game screen Grid button: grid lines along the board cell edges on / off (default off).</summary>
-        public static bool Grid
-        {
-            get { return PlayerPrefs.GetInt("ap_grid", 0) == 1; }
-            set { PlayerPrefs.SetInt("ap_grid", value ? 1 : 0); PlayerPrefs.Save(); }
-        }
-
         public static int Hints
         {
             get { return PlayerPrefs.GetInt("ap_hints", 3); }

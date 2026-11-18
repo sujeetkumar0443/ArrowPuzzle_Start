@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ArrowPuzzle
 {
-    public enum Icon { Bulb, Star, Heart, Gear, Back, Pause, Restart, Home, Play, Sound, Vibrate, Lock, ArrowRight, Share, Shield, Chevron, Music, Check, Skip, Palette, Grid, Eye, EyeOff }
+    public enum Icon { Bulb, Star, Heart, Gear, Back, Pause, Restart, Home, Play, Sound, Vibrate, Lock, ArrowRight, Share, Shield, Chevron, Music, Check, Skip, Palette }
 
     /// <summary>
     /// Icons drawn in code (stroke polylines or generated sprites), copied from the design's 24x24 icon set.
@@ -142,25 +142,6 @@ namespace ArrowPuzzle
                     Rect(rt, 14.4f, 11.6f, 3.4f, 3.4f, 1.7f, color, sizeD);
                     break;
                 }
-
-                case Icon.Eye:    // open eye: almond outline and a pupil
-                case Icon.EyeOff: // the same, crossed out
-                {
-                    var lid = Arc(12, 21, 13, 46f, 134f, 12);   // upper lid
-                    var low = Arc(12, 3, 13, 226f, 314f, 12);   // lower lid
-                    Stroke(rt, color, 2.2f, s, lid);
-                    Stroke(rt, color, 2.2f, s, low);
-                    Rect(rt, 9, 9, 6, 6, 3, color, sizeD);
-                    if (icon == Icon.EyeOff) Stroke(rt, color, 2.4f, s, P(4, 20), P(20, 4));
-                    break;
-                }
-
-                case Icon.Grid: // "#": two vertical and two horizontal lines
-                    Stroke(rt, color, stroke, s, P(9, 4), P(9, 20));
-                    Stroke(rt, color, stroke, s, P(15, 4), P(15, 20));
-                    Stroke(rt, color, stroke, s, P(4, 9), P(20, 9));
-                    Stroke(rt, color, stroke, s, P(4, 15), P(20, 15));
-                    break;
 
                 case Icon.Check:
                     Stroke(rt, color, 3f, s, P(5, 12.5f), P(10, 17.5f), P(19, 7));

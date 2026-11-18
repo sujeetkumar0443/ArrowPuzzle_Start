@@ -17,8 +17,6 @@ namespace ArrowPuzzle
         const float BoardSide = 10f;                        // board area side margin (no card any more)
         // bottom: two round 62 buttons side by side, centred; the hint count pill hangs below the Hint button
         const float BtnBottom = 40f, BtnH = 62f, BtnGapX = 30f, BadgeH = 20f, BadgeOver = 9f;
-        const float GridRingD = 3f; // Grid button ON: Accent ring width
-        const float EyeIconD = 14f; // eye icon in the Grid button's state badge
         const float BoardGap = 12f;                         // between the buttons (with the badge) and the board area
         const float BoardBottom = BtnBottom + BtnH + BoardGap; // no banner
         const float CardPad = 4f;
@@ -75,11 +73,7 @@ namespace ArrowPuzzle
         readonly Image[] hearts = new Image[BoardView.MaxLives];
         readonly RectTransform[] heartRts = new RectTransform[BoardView.MaxLives];
         readonly Coroutine[] heartFx = new Coroutine[BoardView.MaxLives];
-        RectTransform area, card, hintRt, restartRt, gridRt;
-        Image gridRing;                 // Accent ring behind the Grid button while the grid is on
-        Graphic[] gridIcon;
-        Image gridBadge;                // eye pill hanging below the Grid button: open eye (ON) / crossed eye (OFF)
-        GameObject gridEyeOn, gridEyeOff;
+        RectTransform area, card, hintRt, restartRt;
         BoardZoom zoom;
         int level; // global level (LevelPath / Campaign)
         float btnBottom = BtnBottom, toastY = ToastY; // move up above the banner (ApplyBannerLayout)
@@ -507,15 +501,12 @@ namespace ArrowPuzzle
             return chip;
         }
 
-        /// <summary>
-        /// Round Hint, Restart and Grid buttons (62, Card with a bottom edge) side by side, centred above the banner.
-        /// Grid toggles the grid lines along the board cell edges (Save.Grid); ON = Accent ring and Accent icon.
-        /// </summary>
+        /// <summary>Round Hint and Restart buttons (62, Card with a bottom edge) side by side, centred above the banner.</summary>
         void BuildButtons()
         {
             var hint = Ui.Btn(Root, "", Theme.Card, Theme.Ink, 0f, BtnH * 0.5f, Theme.CardShadow, BtnEdge, OnHint, Icon.Bulb, 28f);
             hintRt = (RectTransform)hint.transform;
-            Ui.PlaceD(hintRt, Ui.BC, new Vector2(0.5f, 0f), new Vector2(-(BtnH + BtnGapX), BtnBottom), new Vector2(BtnH, BtnH));
+            Ui.PlaceD(hintRt, Ui.BC, new Vector2(0.5f, 0f), new Vector2(-(BtnH + BtnGapX) * 0.5f, BtnBottom), new Vector2(BtnH, BtnH));
 
             // hints left: small Accent pill hanging below the button
             var badge = ScreenKit.Rounded(hint.transform, "Badge", Theme.Accent, BadgeH * 0.5f);
@@ -527,54 +518,13 @@ namespace ArrowPuzzle
 
             var restart = Ui.Btn(Root, "", Theme.Card, Theme.Ink, 0f, BtnH * 0.5f, Theme.CardShadow, BtnEdge, Restart, Icon.Restart, 28f);
             restartRt = (RectTransform)restart.transform;
-            Ui.PlaceD(restartRt, Ui.BC, new Vector2(0.5f, 0f), new Vector2(0f, BtnBottom), new Vector2(BtnH, BtnH));
-
-            // Grid: a slot holding the ring (behind) and the button (fills the slot)
-            gridRt = Ui.New(Root, "GridSlot");
-            Ui.PlaceD(gridRt, Ui.BC, new Vector2(0.5f, 0f), new Vector2(BtnH + BtnGapX, BtnBottom), new Vector2(BtnH, BtnH));
-            var grid = Ui.Btn(gridRt, "", Theme.Card, Theme.Ink, 0f, BtnH * 0.5f, Theme.CardShadow, BtnEdge, OnGrid, Icon.Grid, 28f);
-            Ui.Fill((RectTransform)grid.transform);
-            gridRing = ScreenKit.Ring(gridRt, Theme.Accent, BtnH * 0.5f, GridRingD);
-            gridRing.transform.SetAsFirstSibling();
-            var icon = grid.transform.Find("Icon_" + Icon.Grid);
-            gridIcon = icon != null ? icon.GetComponentsInChildren<Graphic>(true) : new Graphic[0];
-
-            // state badge: a small pill hanging below the button, like the Hint count (ON: Accent + open eye,
-            // OFF: Panel + crossed eye)
-            gridBadge = ScreenKit.Rounded(grid.transform, "EyeBadge", Theme.Panel, BadgeH * 0.5f);
-            gridBadge.raycastTarget = false;
-            gridBadge.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
-            Ui.PlaceD(gridBadge.rectTransform, Ui.BC, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(30f, BadgeH));
-            var eyeOn = Icons.Make(gridBadge.transform, Icon.Eye, Theme.AccentText, EyeIconD);
-            Ui.PlaceD(eyeOn, Ui.C, Vector2.zero, new Vector2(EyeIconD, EyeIconD));
-            var eyeOff = Icons.Make(gridBadge.transform, Icon.EyeOff, Theme.PanelText, EyeIconD);
-            Ui.PlaceD(eyeOff, Ui.C, Vector2.zero, new Vector2(EyeIconD, EyeIconD));
-            gridEyeOn = eyeOn.gameObject;
-            gridEyeOff = eyeOff.gameObject;
-            SetGridLook(Save.Grid);
-        }
-
-        void OnGrid()
-        {
-            bool on = !Save.Grid;
-            Save.Grid = on;
-            SetGridLook(on);
-            Board.SetGrid(on, false);
-        }
-
-        void SetGridLook(bool on)
-        {
-            if (gridRing != null) gridRing.gameObject.SetActive(on);
-            if (gridIcon != null) foreach (var g in gridIcon) g.color = on ? Theme.Accent : Theme.Ink;
-            if (gridBadge != null) gridBadge.color = on ? Theme.Accent : Theme.Panel;
-            if (gridEyeOn != null) gridEyeOn.SetActive(on);
-            if (gridEyeOff != null) gridEyeOff.SetActive(!on);
+            Ui.PlaceD(restartRt, Ui.BC, new Vector2(0.5f, 0f), new Vector2((BtnH + BtnGapX) * 0.5f, BtnBottom), new Vector2(BtnH, BtnH));
         }
 
         // ------------------------------------------------------------------ banner
 
         /// <summary>
-        /// Puts Hint / Restart / Grid (and their toast) 8 above the banner and ends the board area BoardGap above them.
+        /// Puts Hint / Restart (and their toast) 8 above the banner and ends the board area BoardGap above them.
         /// No banner (height 0): the old 40 from the bottom. Returns true when something moved.
         /// </summary>
         bool ApplyBannerLayout()
@@ -584,9 +534,8 @@ namespace ArrowPuzzle
             if (Mathf.Abs(y - btnBottom) < 0.5f) return false; // the banner keeps its size across refreshes
             btnBottom = y;
             toastY = y + BtnH + 18f;
-            hintRt.anchoredPosition = new Vector2(-Theme.D(BtnH + BtnGapX), Theme.D(y));
-            restartRt.anchoredPosition = new Vector2(0f, Theme.D(y));
-            gridRt.anchoredPosition = new Vector2(Theme.D(BtnH + BtnGapX), Theme.D(y));
+            hintRt.anchoredPosition = new Vector2(-Theme.D((BtnH + BtnGapX) * 0.5f), Theme.D(y));
+            restartRt.anchoredPosition = new Vector2(Theme.D((BtnH + BtnGapX) * 0.5f), Theme.D(y));
             area.offsetMin = new Vector2(Theme.D(BoardSide), Theme.D(y + BtnH + BoardGap));
             return true;
         }
@@ -727,7 +676,6 @@ namespace ArrowPuzzle
             Canvas.ForceUpdateCanvases(); // make sure the area rect is up to date
             Vector2 free = area.rect.size - Vector2.one * Theme.D(CardPad * 2f);
             Board.transform.localScale = Vector3.one; // a level loads at full size for the current area
-            Board.SetGrid(Save.Grid, true); // the Grid button state, applied with the level (no fade)
             Board.Load(data, new Vector2(Mathf.Max(1f, free.x), Mathf.Max(1f, free.y)));
 
             // card wraps the board (BoardView centres itself on its parent) with 10 padding

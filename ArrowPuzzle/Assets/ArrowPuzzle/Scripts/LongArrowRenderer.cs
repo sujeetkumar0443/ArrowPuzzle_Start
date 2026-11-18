@@ -7,12 +7,6 @@ namespace ArrowPuzzle
     /// <summary>Colours and sizes of the long-arrow renderer, all in one place (the theme system replaces this later).</summary>
     public static class LongStyle
     {
-        // ---- guide lines (Grid button: lines along the board cell edges), tune here
-        public const float GuideLineCells = 0.14f;     // width, cells (scales with the zoom)
-        public const float GuideLineAlpha = 0.26f;     // InkSoft at this alpha...
-        public const float GuideLineAlphaDark = 0.32f; // ...and this on dark themes (Night)
-        public const float GuideLineMinPx = 2f;        // never thinner than this on screen
-
         // ---- stroke shape, in cells (scales with the board and the zoom)
         public const float LineCells = 0.19f;      // line width
         public const float HeadCells = 0.62f;      // arrowhead length
@@ -26,7 +20,6 @@ namespace ArrowPuzzle
         public const float PressMul = 1.35f, HaloMul = 4f, HintGlowMul = 4.5f;
         public const float GlowMul = 3f, GlowAlpha = 0.22f; // theme Glow (night): soft copy under each static arrow
         public const bool BoardTiles = false;               // game board: no cell tiles (arrows on the screen background)
-        public const float GridFadeIn = 0.15f, GridFadeOut = 0.25f; // s: guide lines on / off
         public const float DotCell = 0.11f, DotMinPx = 1.2f;        // board dot radius: cells, at least screen px
         public const float DotAlpha = 0.22f, DotAlphaDark = 0.28f;  // board dots: InkSoft at this alpha (dark themes: more)
         public const float DotFadeIn = 0.2f;                         // s: a dot appears once its cell is empty
@@ -38,17 +31,6 @@ namespace ArrowPuzzle
             {
                 var c = Theme.InkSoft;
                 c.a = Theme.Current != null && Theme.Current.Dark ? DotAlphaDark : DotAlpha;
-                return c;
-            }
-        }
-
-        /// <summary>Guide line colour for the current theme: InkSoft at GuideLineAlpha (GuideLineAlphaDark on dark themes: Night).</summary>
-        public static Color GridColor
-        {
-            get
-            {
-                var c = Theme.InkSoft;
-                c.a = Theme.Current != null && Theme.Current.Dark ? GuideLineAlphaDark : GuideLineAlpha;
                 return c;
             }
         }
@@ -446,98 +428,6 @@ namespace ArrowPuzzle
     }
 
     /// <summary>
-    /// The edges of the mask cells (null mask = every cell) as thin lines, one mesh. An edge shared by two cells is drawn
-    /// once and neighbouring edges on the same grid line are merged into one run, so the mesh stays small on dense
-    /// boards. width (board-local units) is set by LongArrowRenderer: GuideLineCells, at least GuideLineMinPx on screen.
-    /// </summary>
-    [RequireComponent(typeof(CanvasRenderer))]
-    public class GridGraphic : MaskableGraphic
-    {
-        // runs in cell units: (fixed coordinate, from, to); horizontal = y fixed, vertical = x fixed
-        readonly List<Vector3> hRuns = new List<Vector3>();
-        readonly List<Vector3> vRuns = new List<Vector3>();
-        float cell;
-        public float width = 1f;
-        public int Verts { get; private set; }
-
-        public void Set(bool[,] m, int cols, int rows, float cellSize)
-        {
-            cell = cellSize;
-            hRuns.Clear();
-            vRuns.Clear();
-            // horizontal line y (0..rows) between cells (x, y - 1) and (x, y): an edge if either is a board cell
-            for (int y = 0; y <= rows; y++)
-            {
-                int start = -1;
-                for (int x = 0; x <= cols; x++)
-                {
-                    bool on = x < cols && (In(m, cols, rows, x, y) || In(m, cols, rows, x, y - 1));
-                    if (on && start < 0) start = x;
-                    else if (!on && start >= 0) { hRuns.Add(new Vector3(y, start, x)); start = -1; }
-                }
-            }
-            for (int x = 0; x <= cols; x++)
-            {
-                int start = -1;
-                for (int y = 0; y <= rows; y++)
-                {
-                    bool on = y < rows && (In(m, cols, rows, x, y) || In(m, cols, rows, x - 1, y));
-                    if (on && start < 0) start = y;
-                    else if (!on && start >= 0) { vRuns.Add(new Vector3(x, start, y)); start = -1; }
-                }
-            }
-            SetVerticesDirty();
-        }
-
-        static bool In(bool[,] m, int cols, int rows, int x, int y)
-        {
-            if (x < 0 || y < 0 || x >= cols || y >= rows) return false;
-            return m == null || m[x, y];
-        }
-
-        public void Dirty() { SetVerticesDirty(); }
-
-        protected override void OnPopulateMesh(VertexHelper vh)
-        {
-            vh.Clear();
-            Color32 col = color;
-            float h = width * 0.5f;
-            // horizontal runs reach h past their ends so the corners close; vertical runs stop between them (no overlap,
-            // so crossings are not drawn twice at double alpha)
-            // a vertical run crosses a horizontal line at every cell boundary, so it is cut into one piece per cell
-            foreach (var r in hRuns)
-                Quad(vh, col, r.y * cell - h, r.y * cell + h, r.x * cell - h, r.z * cell + h, true);
-            foreach (var r in vRuns)
-                for (int y = (int)r.y; y < (int)r.z; y++)
-                    Quad(vh, col, r.x * cell - h, r.x * cell + h, y * cell + h, (y + 1) * cell - h, false);
-            Verts = vh.currentVertCount;
-        }
-
-        /// <summary>A rectangle: across = (a0, a1) across the line, along = (b0, b1) along it.</summary>
-        static void Quad(VertexHelper vh, Color32 col, float a0, float a1, float b0, float b1, bool horizontal)
-        {
-            if (b1 <= b0) return;
-            int i = vh.currentVertCount;
-            if (horizontal)
-            {
-                vh.AddVert(new Vector3(b0, a0), col, Vector4.zero);
-                vh.AddVert(new Vector3(b0, a1), col, Vector4.zero);
-                vh.AddVert(new Vector3(b1, a1), col, Vector4.zero);
-                vh.AddVert(new Vector3(b1, a0), col, Vector4.zero);
-            }
-            else
-            {
-                vh.AddVert(new Vector3(a0, b0), col, Vector4.zero);
-                vh.AddVert(new Vector3(a0, b1), col, Vector4.zero);
-                vh.AddVert(new Vector3(a1, b1), col, Vector4.zero);
-                vh.AddVert(new Vector3(a1, b0), col, Vector4.zero);
-            }
-            vh.AddTriangle(i, i + 1, i + 2);
-            vh.AddTriangle(i + 2, i + 3, i);
-        }
-    }
-
-    /// <summary>
     /// A dot at the centre of every mask cell (null mask = every cell), one mesh: a filled polygon with a 1 screen px
     /// alpha-0 rim for anti-aliasing. Each dot has its own alpha (0 = hidden: an arrow covers the cell). Showing / fading
     /// a dot only rewrites the vertex colours of the mesh (Flush), never its geometry; the geometry is rebuilt only when
@@ -677,8 +567,7 @@ namespace ArrowPuzzle
 
     /// <summary>
     /// Draws a long-arrow level for BoardView. Layers under the board (which has its own Canvas):
-    ///  Tiles (one mesh) -> Dots (one mesh, a dot per board cell) -> Grid (own Canvas: grid lines along the cell edges,
-    ///  shown by the Grid button)
+    ///  Tiles (one mesh) -> Dots (one mesh, a dot per empty board cell)
     ///  -> Arrows (static arrows, PerBatch per mesh, CanvasGroup for the collapse) ->
     ///  Moving (own Canvas: one mesh per animating arrow, so its per-frame updates never re-batch the static arrows) ->
     ///  Fx (own Canvas: press / hint / halo overlays, impact ring).
@@ -701,10 +590,8 @@ namespace ArrowPuzzle
         RectTransform root, arrowsRoot, movingRoot, fxRoot;
         CanvasGroup arrowsGroup;
         TileGraphic tiles;
-        GridGraphic grid;
         DotGraphic dots;
         float dotR = -1f, dotF = -1f; // last built dot radius / feather (board-local)
-        float gridAlpha, gridTarget; // touch grid fade, 0..1
         readonly List<StrokeGraphic> batches = new List<StrokeGraphic>();
         readonly List<Arrow> arrows = new List<Arrow>();
         readonly Dictionary<int, StrokeGraphic> moving = new Dictionary<int, StrokeGraphic>();
@@ -750,10 +637,6 @@ namespace ArrowPuzzle
             tiles.raycastTarget = false;
             dots = Layer(root, "Dots", false).gameObject.AddComponent<DotGraphic>();
             dots.raycastTarget = false;
-            var gl = Layer(root, "Grid", true); // own canvas: its fade never re-batches the arrows
-            grid = gl.gameObject.AddComponent<GridGraphic>();
-            grid.raycastTarget = false;
-            gl.gameObject.SetActive(false);
             arrowsRoot = Layer(root, "Static", false);
             arrowsRoot.pivot = new Vector2(0.5f, 0.5f); // collapse / revive scale around the board centre
             arrowsRoot.offsetMin = arrowsRoot.offsetMax = Vector2.zero;
@@ -808,10 +691,6 @@ namespace ArrowPuzzle
             dots.color = LongStyle.DotColor;
             dots.Set(data.mask, data.cols, data.rows, cell);
             dotR = dotF = -1f;
-            grid.color = LongStyle.GridColor;
-            grid.Set(data.mask, data.cols, data.rows, cell);
-            gridAlpha = gridTarget = 0f;
-            grid.gameObject.SetActive(false);
 
             for (int i = 0; i < rest.Count; i++)
             {
@@ -848,7 +727,7 @@ namespace ArrowPuzzle
         /// <summary>
         /// Every frame from BoardView. rootPerLocal = root canvas units per board-local unit; screenPerLocal = screen
         /// px per board-local unit. The stroke shape is in cells, so it scales with the board transform by itself; only
-        /// the screen-px parts (1 px feather, 2 px minimum line, 1 px grid lines, dot minimum) need a rebuild, so the
+        /// the screen-px parts (1 px feather, 2 px minimum line, dot minimum) need a rebuild, so the
         /// meshes are rebuilt only when the scale moved by more than RebuildScale since the last build (at most every
         /// RebuildEvery s, and once more when it stops changing).
         /// </summary>
@@ -867,8 +746,6 @@ namespace ArrowPuzzle
             // the shape scales with the cell (and so with the zoom); only the 1 px feather and the 2 px minimum are screen px
             line = Mathf.Max(LongStyle.LineCells * cell, LongStyle.LineMinPx / Mathf.Max(1e-4f, screenPerLocal));
             feather = LongStyle.FeatherPx / Mathf.Max(1e-4f, screenPerLocal);
-            grid.width = Mathf.Max(LongStyle.GuideLineCells * cell, LongStyle.GuideLineMinPx / Mathf.Max(1e-4f, screenPerLocal));
-            if (grid.gameObject.activeSelf) grid.Dirty(); // hidden: built with this width when it shows (OnEnable)
             // dots: 0.11 cell, at least DotMinPx on screen; the mesh is rebuilt only when that size really changed
             float r = Mathf.Max(LongStyle.DotCell * cell, LongStyle.DotMinPx / Mathf.Max(1e-4f, screenPerLocal));
             if (Mathf.Abs(r - dotR) > dotR * 0.02f || Mathf.Abs(feather - dotF) > dotF * 0.25f)
@@ -925,31 +802,6 @@ namespace ArrowPuzzle
                 if (a >= 1f) dotFades.RemoveAt(i);
             }
             dots.Flush();
-        }
-
-        // ------------------------------------------------------------------ touch grid
-
-        /// <summary>Grid lines on / off (BoardView, the Grid button): fade in / out, or at once with instant.</summary>
-        public void SetGrid(bool on, bool instant)
-        {
-            gridTarget = on ? 1f : 0f;
-            if (!instant || grid == null) return;
-            gridAlpha = gridTarget;
-            grid.gameObject.SetActive(on);
-            if (on) grid.canvasRenderer.SetAlpha(1f);
-        }
-
-        public int GridVerts { get { return grid != null ? grid.Verts : 0; } }
-
-        /// <summary>Every frame from BoardView: steps the grid fade. At alpha 0 the grid's GameObject is off (no cost).</summary>
-        public void TickGrid(float dt)
-        {
-            if (grid == null || gridAlpha == gridTarget) return;
-            float dur = gridTarget > gridAlpha ? LongStyle.GridFadeIn : LongStyle.GridFadeOut;
-            gridAlpha = Mathf.MoveTowards(gridAlpha, gridTarget, dt / dur);
-            bool show = gridAlpha > 0f;
-            if (grid.gameObject.activeSelf != show) grid.gameObject.SetActive(show);
-            if (show) grid.canvasRenderer.SetAlpha(gridAlpha); // the mesh keeps the theme alpha: no rebuild per frame
         }
 
         /// <summary>Stroke sizes for a width multiplier, in board-local units.</summary>
