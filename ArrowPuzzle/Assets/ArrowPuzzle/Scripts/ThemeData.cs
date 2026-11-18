@@ -17,8 +17,6 @@ namespace ArrowPuzzle
         public Color Accent, AccentDark, AccentText;
         public Color Panel, PanelEdge, PanelText;
         public Color Tile;
-        public bool HasDots;
-        public Color Dots;
         public Color[] Lines;
         public LineMode LineMode;
         public bool Glow;
@@ -60,7 +58,6 @@ namespace ArrowPuzzle
                         Id = "cream", Name = "Cream", BgTop = H("#F4EFE6"), BgBottom = H("#F4EFE6"), Card = H("#FFFFFF"),
                         Ink = H("#26323F"), InkSoft = H("#5A6675"), Accent = H("#E4572E"), AccentDark = H("#B23F1D"), AccentText = H("#FFFFFF"),
                         Panel = H("#26323F"), PanelEdge = H("#12181F"), PanelText = H("#FFFFFF"), Tile = H("#F5F0E6"),
-                        HasDots = true, Dots = H("#E9E1D2"),
                         Lines = new[] { H("#E4572E"), H("#2EC4B6"), H("#FFB703"), H("#9B5DE5"), H("#3B82F6"), H("#3DBB5E") },
                         LineMode = LineMode.Random, OwnedByDefault = true,
                     },

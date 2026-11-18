@@ -86,7 +86,6 @@ namespace ArrowPuzzle
         public static Color Panel = Hex("#26323F");       // dark buttons and pills (Settings, coin pill, SKIPS)
         public static Color PanelEdge = Hex("#12181F");
         public static Color PanelText = Hex("#FFFFFF");
-        public static bool HasDots = true;                // background dot pattern (Dot) or none
         public static Color[] Lines = { Hex("#E4572E"), Hex("#2EC4B6"), Hex("#FFB703"), Hex("#9B5DE5"), Hex("#3B82F6"), Hex("#3DBB5E") };
         public static LineMode LineMode = LineMode.Random;
         public static bool Glow;
@@ -121,8 +120,7 @@ namespace ArrowPuzzle
             PanelEdge = t.PanelEdge;
             PanelText = t.PanelText;
             Tile = t.Tile;
-            HasDots = t.HasDots;
-            Dot = t.HasDots ? t.Dots : Mix(Bg, Ink, 0.08f);
+            Dot = Mix(Bg, Ink, 0.08f);         // old-level board dots only (no background dot pattern)
             Lines = t.Lines;
             LineMode = t.LineMode;
             Glow = t.Glow;

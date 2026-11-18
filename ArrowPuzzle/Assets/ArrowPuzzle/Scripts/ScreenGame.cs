@@ -72,7 +72,6 @@ namespace ArrowPuzzle
         readonly RectTransform[] heartRts = new RectTransform[BoardView.MaxLives];
         readonly Coroutine[] heartFx = new Coroutine[BoardView.MaxLives];
         RectTransform area, card, hintRt, restartRt;
-        Image backdropDots;
         BoardZoom zoom;
         int level; // global level (LevelPath / Campaign)
         float btnBottom = BtnBottom, toastY = ToastY; // move up above the banner (ApplyBannerLayout)
@@ -271,7 +270,7 @@ namespace ArrowPuzzle
             return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
         }
 
-        /// <summary>Screen background (theme Bg or gradient) with the dot pattern when the theme has dots, under the insets too.</summary>
+        /// <summary>Screen background (theme Bg or gradient) under the insets too (no dot pattern).</summary>
         void BuildBackdrop()
         {
             var bg = Ui.Img(Root, "Bg", null, Theme.Bg);
@@ -280,12 +279,6 @@ namespace ArrowPuzzle
             Ui.Fill(bg.rectTransform);
             bg.rectTransform.offsetMin = new Vector2(0f, -Theme.D(400f));
             bg.rectTransform.offsetMax = new Vector2(0f, Theme.D(400f));
-            backdropDots = Ui.Img(bg.rectTransform, "Dots", Theme.DotTile, Theme.Dot);
-            backdropDots.type = Image.Type.Tiled;
-            backdropDots.pixelsPerUnitMultiplier = 64f / (34f * Theme.K);
-            backdropDots.raycastTarget = false;
-            Ui.Fill(backdropDots.rectTransform);
-            backdropDots.gameObject.SetActive(Theme.HasDots);
         }
 
         /// <summary>

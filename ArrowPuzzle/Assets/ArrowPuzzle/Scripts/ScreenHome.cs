@@ -97,7 +97,7 @@ namespace ArrowPuzzle
 
         // ------------------------------------------------------------------ build
 
-        /// <summary>Theme background (solid or gradient) and the dot pattern when the theme has dots, over the whole canvas.</summary>
+        /// <summary>Theme background (solid or gradient) over the whole canvas.</summary>
         void BuildBackdrop()
         {
             backdrop = Ui.New(Root, "Backdrop");
@@ -105,13 +105,6 @@ namespace ArrowPuzzle
             bg.raycastTarget = false;
             Ui.Fill(bg.rectTransform);
             Theme.PaintBg(bg);
-
-            var dots = Ui.Img(backdrop, "Dots", Theme.DotTile, Theme.Dot);
-            dots.gameObject.SetActive(Theme.HasDots);
-            dots.type = Image.Type.Tiled;
-            dots.pixelsPerUnitMultiplier = 64f / (34f * Theme.K);
-            dots.raycastTarget = false;
-            Ui.Fill(dots.rectTransform);
         }
 
         void BuildTopBar()
