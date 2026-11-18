@@ -910,7 +910,37 @@ namespace ArrowPuzzle
 
         void LateUpdate()
         {
-            if (isLong && lr != null && level != null) lr.Tick(RootPerLocal(), ScreenPerLocal());
+            if (!isLong || lr == null || level == null) return;
+            lr.Tick(RootPerLocal(), ScreenPerLocal());
+            lr.TickGrid(Time.unscaledDeltaTime);
+            if (touching && Debug.isDebugBuild)
+            {
+                float ms = Time.unscaledDeltaTime * 1000f;
+                touchFrames++;
+                touchMs += ms;
+                if (ms > touchMaxMs) touchMaxMs = ms;
+            }
+        }
+
+        // touch grid ([LongPerf] frame time while a finger is on the board, editor and development builds)
+        bool touching;
+        int touchFrames;
+        float touchMs, touchMaxMs;
+
+        /// <summary>
+        /// BoardZoom: true when the first finger goes down on the board area, false when the last one lifts. Long levels
+        /// fade the grid lines of the mask cells in / out. No effect on taps or on the press / hint highlight.
+        /// </summary>
+        public void SetTouching(bool on)
+        {
+            if (on == touching) return;
+            touching = on;
+            if (lr != null) lr.SetGrid(on && isLong);
+            if (on) { touchFrames = 0; touchMs = touchMaxMs = 0f; }
+            else if (Debug.isDebugBuild && isLong && level != null && touchFrames > 0)
+                Debug.Log("[LongPerf] " + level.shape + " touch (grid on): " + touchFrames + " frames, avg "
+                          + (touchMs / touchFrames).ToString("F2") + " ms, max " + touchMaxMs.ToString("F2")
+                          + " ms | grid vertices " + lr.GridVerts + ", zoom " + RootPerLocal().ToString("F2"));
         }
 
         /// <summary>Root canvas units per board-local unit (board scale x zoom).</summary>

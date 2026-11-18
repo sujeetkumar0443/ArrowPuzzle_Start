@@ -95,7 +95,7 @@ namespace ArrowPuzzle
             fingers.Clear();
             pos.Clear();
             tapLive = rightDown = false;
-            if (board != null) board.ClearPress();
+            if (board != null) { board.ClearPress(); board.SetTouching(false); }
             anim = null; // coroutines stop with the object
         }
 
@@ -107,6 +107,7 @@ namespace ArrowPuzzle
             pos.Clear();
             tapLive = rightDown = false;
             board.ClearPress();
+            board.SetTouching(false);
         }
 
         void Update()
@@ -129,8 +130,9 @@ namespace ArrowPuzzle
         public void OnPointerDown(PointerEventData e)
         {
             StopAnim(); // a touch grabs the board
-            if (e.button == PointerEventData.InputButton.Right) { rightDown = true; return; }
+            if (e.button == PointerEventData.InputButton.Right) { rightDown = true; board.SetTouching(true); return; }
             if (e.button != PointerEventData.InputButton.Left) return;
+            board.SetTouching(true); // long levels: grid lines fade in while any finger is down
 
             if (!pos.ContainsKey(e.pointerId)) fingers.Add(e.pointerId);
             pos[e.pointerId] = e.position;
@@ -186,7 +188,7 @@ namespace ArrowPuzzle
             if (e.button == PointerEventData.InputButton.Right)
             {
                 rightDown = false;
-                if (fingers.Count == 0) Settle();
+                if (fingers.Count == 0) { board.SetTouching(false); Settle(); }
                 return;
             }
             if (!pos.ContainsKey(e.pointerId)) return;
@@ -201,7 +203,7 @@ namespace ArrowPuzzle
                 tapLive = false;
                 Tap(tapStart);
             }
-            if (fingers.Count == 0 && !rightDown) Settle();
+            if (fingers.Count == 0 && !rightDown) { board.SetTouching(false); Settle(); }
         }
 
         public void OnScroll(PointerEventData e)
