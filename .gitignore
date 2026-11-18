@@ -75,3 +75,6 @@ $RECYCLE.BIN/
 *.tmp
 *.swp
 *~
+
+# ---- Long level previews (Arrow/Long Levels/Generate Samples) ----
+/ArrowPuzzle/LongPreview/

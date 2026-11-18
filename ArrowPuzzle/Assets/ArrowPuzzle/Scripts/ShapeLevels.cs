@@ -147,6 +147,19 @@ namespace ArrowPuzzle
             else Debug.LogError("ShapeLevels: " + (total - ok) + " of " + total + " levels failed:" + report);
         }
 
+        /// <summary>
+        /// Editor tools (Arrow/Long Levels): parses any level text with the game's own parser and runs the same checks
+        /// as SelfCheck (format, cover, peel test). Level number -> null if valid, otherwise the first problem.
+        /// </summary>
+        public static SortedDictionary<int, string> VerifyText(string text)
+        {
+            var d = new Dictionary<int, Entry>();
+            Parse(text, d);
+            var res = new SortedDictionary<int, string>();
+            foreach (var kv in d) res[kv.Key] = Verify(kv.Value);
+            return res;
+        }
+
         /// <summary>Null if the level is valid, otherwise the first problem found.</summary>
         static string Verify(Entry e)
         {
