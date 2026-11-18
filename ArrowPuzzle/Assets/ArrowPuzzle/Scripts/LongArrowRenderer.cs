@@ -17,6 +17,16 @@ namespace ArrowPuzzle
         public const float TileCell = 0.92f;       // tile square size, cells
         public const float PressMul = 1.35f, HaloMul = 4f, HintGlowMul = 4.5f;
 
+        // ---- animation timings (tune here; BoardView's long-arrow routines read them)
+        public const float ExitCellsPerSecond = 110f; // exit speed once the ease-in is done
+        public const float ExitMaxSeconds = 0.5f;     // pull-back + slide never take longer: long arrows go faster
+        public const float PullBackSeconds = 0.05f;   // short pull-back before the launch...
+        public const float PullBackCells = 0.08f;     // ...over this distance
+        public const float ExitStartSpeed = 0.4f;     // ease-in: the launch starts at 40 % of full speed...
+        public const float ExitEaseSeconds = 0.08f;   // ...and reaches full speed after this
+        public const float BumpCellsPerSecond = 80f;  // blocked tap: slide up to the blocker
+        public const float RecoilSeconds = 0.31f;     // blocked tap: spring back to rest
+
         public static Color Arrow(int colorIndex) { return Theme.Palette[((colorIndex % Theme.Palette.Length) + Theme.Palette.Length) % Theme.Palette.Length]; }
         public static Color Tile { get { return Theme.Tile; } }
         public static Color Error { get { return Theme.Error; } }

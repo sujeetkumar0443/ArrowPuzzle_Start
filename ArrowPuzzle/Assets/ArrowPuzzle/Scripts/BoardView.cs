@@ -860,8 +860,7 @@ namespace ArrowPuzzle
         // ================================================================== long winding arrows (LongArrowRenderer)
 
         const float LongReachD = 18f;      // hit reach around a line, design px (screen-fixed)
-        const float LongSpeedCells = 40f;  // exit / slide speed, cells per second
-        const float LongAccel = 0.08f;     // s to reach full speed
+        // exit / bump timings: LongStyle (LongArrowRenderer.cs), ExitCellsPerSecond etc.
 
         void BuildLong()
         {
@@ -966,8 +965,9 @@ namespace ArrowPuzzle
         }
 
         /// <summary>
-        /// Free arrow: pull back, then slide along its own path and straight out of the head at LongSpeedCells (constant
-        /// after a short ramp) until its tail has left the grid. Its cells left owner[,] at the tap.
+        /// Free arrow: a short pull-back, then it slides along its own path and straight out of the head until its tail has
+        /// left the grid: LongStyle.ExitCellsPerSecond after a quick ease-in (from ExitStartSpeed), faster for long arrows
+        /// so the whole exit stays within ExitMaxSeconds. Its cells left owner[,] at the tap, so other arrows stay tappable.
         /// </summary>
         IEnumerator LongExitRoutine(Piece p)
         {
@@ -976,8 +976,8 @@ namespace ArrowPuzzle
             bool perf = Debug.isDebugBuild; // [LongPerf] in the editor and development builds
             float perfSum = 0f, perfWorst = 0f;
             int perfN = 0;
-            float back = 0.16f * cell;
-            const float pullTime = 0.11f;
+            float back = LongStyle.PullBackCells * cell;
+            float pullTime = LongStyle.PullBackSeconds;
             float t = 0f;
             while (t < pullTime)
             {
@@ -989,8 +989,12 @@ namespace ArrowPuzzle
                 RenderLong(p);
             }
 
+            // slide: speed v after an ease-in from s0 * v over a; time for distance total = total / v + a (1 - s0) / 2,
+            // so v is raised for long arrows to keep pull-back + slide within ExitMaxSeconds
             float total = back + p.edgeDist + p.bodyLen + 0.5f * cell; // the tail (and its cap) past the grid edge
-            float v = LongSpeedCells * cell;
+            float a = LongStyle.ExitEaseSeconds, s0 = LongStyle.ExitStartSpeed;
+            float slideMax = Mathf.Max(0.05f, LongStyle.ExitMaxSeconds - pullTime - a * (1f - s0) * 0.5f);
+            float v = Mathf.Max(LongStyle.ExitCellsPerSecond * cell, total / slideMax);
             t = 0f;
             while (true)
             {
@@ -998,7 +1002,7 @@ namespace ArrowPuzzle
                 float dt = Time.unscaledDeltaTime;
                 perfSum += dt; perfWorst = Mathf.Max(perfWorst, dt); perfN++;
                 t += dt;
-                float s = t < LongAccel ? v * t * t / (2f * LongAccel) : v * (t - LongAccel * 0.5f);
+                float s = t < a ? v * (s0 * t + (1f - s0) * t * t / (2f * a)) : v * (t - a * (1f - s0) * 0.5f);
                 if (s >= total) break;
                 p.dist = -back + s;
                 RenderLong(p);
@@ -1007,7 +1011,8 @@ namespace ArrowPuzzle
                       + (perfSum / Mathf.Max(1, perfN) * 1000f).ToString("F2") + " ms, worst " + (perfWorst * 1000f).ToString("F2")
                       + " ms | board vertices " + (lr.ArrowVerts + lr.TileVerts) + " (arrows " + lr.ArrowVerts + " in "
                       + lr.BatchCount + " batches, tiles " + lr.TileVerts + "), " + RootPerLocal().ToString("F2")
-                      + " root units per board unit, " + (remaining - 1) + " arrows left");
+                      + " root units per board unit, " + (remaining - 1) + " arrows left, speed "
+                      + (v / cell).ToString("F0") + " cells/s, " + (pullTime + t).ToString("F2") + " s");
             lr.EndMove(p.index, true);
             p.fx = null;
             Finish(p);
@@ -1019,7 +1024,7 @@ namespace ArrowPuzzle
             lr.Press(-1);
             lr.BeginMove(p.index);
             float adv = ((k - 1) + 0.3f) * cell;
-            float slide = 0.08f + adv / (LongSpeedCells * cell);
+            float slide = 0.04f + adv / (LongStyle.BumpCellsPerSecond * cell);
             float t = 0f;
             while (t < slide)
             {
@@ -1039,12 +1044,13 @@ namespace ArrowPuzzle
             }
             StartCoroutine(LongRingRoutine(CenterOf(p.d.Head) + p.dirV * ((k - 0.5f) * cell)));
 
-            const float recoil = 0.62f;
+            float recoil = LongStyle.RecoilSeconds;
+            float k2 = 0.62f / recoil; // same two-wiggle spring as before, time-compressed
             t = 0f;
             while (t < recoil)
             {
                 t += Time.unscaledDeltaTime;
-                float s = Mathf.Min(t, recoil);
+                float s = Mathf.Min(t, recoil) * k2;
                 p.dist = adv * Mathf.Exp(-7f * s) * Mathf.Cos(2f * Mathf.PI * 2f * s);
                 RenderLong(p);
                 yield return null;
