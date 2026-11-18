@@ -910,20 +910,20 @@ namespace ArrowPuzzle
         public static byte[] Png(LongLevel l, int cellPx)
         {
             int w = l.Cols * cellPx + 2 * Margin, h = l.Rows * cellPx + 2 * Margin;
-            var img = new float[w * h * 3];
-            for (int i = 0; i < img.Length; i++) img[i] = 1f;
+            var img = new double[w * h * 3]; // double, not float: Mono and .NET round float intermediates differently
+            for (int i = 0; i < img.Length; i++) img[i] = 1.0;
 
             for (int r = 0; r < l.Rows; r++)
                 for (int c = 0; c < l.Cols; c++)
                     if (l.Mask[r * l.Cols + c])
                         for (int y = 1; y < cellPx - 1; y++)
                             for (int x = 1; x < cellPx - 1; x++)
-                                Blend(img, w, h, Margin + c * cellPx + x, Margin + r * cellPx + y, 0.945f, 0.945f, 0.945f, 1f);
+                                Blend(img, w, h, Margin + c * cellPx + x, Margin + r * cellPx + y, 0.945, 0.945, 0.945, 1.0);
 
             for (int i = 0; i < l.Count; i++)
             {
                 bool free = l.FreeAtStart != null && l.FreeAtStart[i];
-                float cr = free ? 0.10f : 0f, cg = free ? 0.62f : 0f, cb = free ? 0.25f : 0f;
+                double cr = free ? 0.10 : 0, cg = free ? 0.62 : 0, cb = free ? 0.25 : 0;
                 var a = l.Arrows[i];
                 var pts = new List<double[]>();
                 foreach (int cell in a)
@@ -942,9 +942,9 @@ namespace ArrowPuzzle
             return Encode(w, h, img);
         }
 
-        static void Blend(float[] img, int w, int h, int x, int y, float r, float g, float b, float a)
+        static void Blend(double[] img, int w, int h, int x, int y, double r, double g, double b, double a)
         {
-            if (x < 0 || y < 0 || x >= w || y >= h || a <= 0f) return;
+            if (x < 0 || y < 0 || x >= w || y >= h || a <= 0) return;
             int i = (y * w + x) * 3;
             img[i] += (r - img[i]) * a;
             img[i + 1] += (g - img[i + 1]) * a;
@@ -952,7 +952,7 @@ namespace ArrowPuzzle
         }
 
         /// <summary>Anti-aliased line of half width hw (coverage from the distance to the segment).</summary>
-        static void Segment(float[] img, int w, int h, double[] a, double[] b, double hw, float r, float g, float bl)
+        static void Segment(double[] img, int w, int h, double[] a, double[] b, double hw, double r, double g, double bl)
         {
             int x0 = (int)Math.Floor(Math.Min(a[0], b[0]) - hw - 2), x1 = (int)Math.Ceiling(Math.Max(a[0], b[0]) + hw + 2);
             int y0 = (int)Math.Floor(Math.Min(a[1], b[1]) - hw - 2), y1 = (int)Math.Ceiling(Math.Max(a[1], b[1]) + hw + 2);
@@ -965,13 +965,13 @@ namespace ArrowPuzzle
                     double t = Math.Max(0, Math.Min(1, (px * vx + py * vy) / vv));
                     double ex = px - vx * t, ey = py - vy * t;
                     double cov = hw + 0.5 - Math.Sqrt(ex * ex + ey * ey);
-                    if (cov > 0) Blend(img, w, h, x, y, r, g, bl, (float)Math.Min(1, cov));
+                    if (cov > 0) Blend(img, w, h, x, y, r, g, bl, Math.Min(1, cov));
                 }
             }
         }
 
         /// <summary>Filled triangle, 4 x 4 supersampled.</summary>
-        static void Triangle(float[] img, int w, int h, double[] p0, double[] p1, double[] p2, float r, float g, float b)
+        static void Triangle(double[] img, int w, int h, double[] p0, double[] p1, double[] p2, double r, double g, double b)
         {
             int x0 = (int)Math.Floor(Math.Min(p0[0], Math.Min(p1[0], p2[0]))), x1 = (int)Math.Ceiling(Math.Max(p0[0], Math.Max(p1[0], p2[0])));
             int y0 = (int)Math.Floor(Math.Min(p0[1], Math.Min(p1[1], p2[1]))), y1 = (int)Math.Ceiling(Math.Max(p0[1], Math.Max(p1[1], p2[1])));
@@ -983,7 +983,7 @@ namespace ArrowPuzzle
                     for (int sy = 0; sy < 4; sy++)
                         for (int sx = 0; sx < 4; sx++)
                             if (InTri(x + (sx + 0.5) / 4, y + (sy + 0.5) / 4, p0, p1, p2)) hit++;
-                    if (hit > 0) Blend(img, w, h, x, y, r, g, b, hit / 16f);
+                    if (hit > 0) Blend(img, w, h, x, y, r, g, b, hit / 16.0);
                 }
             }
         }
@@ -999,7 +999,7 @@ namespace ArrowPuzzle
 
         // ------------------------------------------------------------------ minimal PNG encoder (RGB 8 bit, zlib)
 
-        static byte[] Encode(int w, int h, float[] img)
+        static byte[] Encode(int w, int h, double[] img)
         {
             var raw = new byte[h * (w * 3 + 1)];
             int k = 0;
@@ -1007,7 +1007,7 @@ namespace ArrowPuzzle
             {
                 raw[k++] = 0; // filter: none
                 for (int x = 0; x < w * 3; x++)
-                    raw[k++] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(img[y * w * 3 + x] * 255f)));
+                    raw[k++] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(img[y * w * 3 + x] * 255.0)));
             }
 
             byte[] deflated;
