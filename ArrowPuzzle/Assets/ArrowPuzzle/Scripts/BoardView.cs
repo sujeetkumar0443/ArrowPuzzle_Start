@@ -876,6 +876,7 @@ namespace ArrowPuzzle
         public void ReviveLife()
         {
             ResetCollapse();
+            ResetDots(); // dots back on the empty cells only (the revived board keeps its removed arrows)
             if (isLong && pieces.Count > 0) reviveFx = StartCoroutine(LongReviveRoutine());
             else if (pieces.Count > 0)
             {
@@ -905,8 +906,34 @@ namespace ArrowPuzzle
             }
             lr.Build(level, cell, rest, colors);
             lr.SetGrid(gridOn, true); // the Grid button state carries over to every level
+            ResetDots();
             lr.Tick(RootPerLocal(), ScreenPerLocal());
             if (Debug.isDebugBuild) StartCoroutine(LogVertsLater()); // editor and development builds
+        }
+
+        /// <summary>Dots back to the board's state: shown on board cells no arrow covers (owner[,] = -1), hidden elsewhere.</summary>
+        void ResetDots()
+        {
+            if (!isLong || lr == null || level == null) return;
+            var empty = new bool[level.cols, level.rows];
+            for (int x = 0; x < level.cols; x++)
+                for (int y = 0; y < level.rows; y++)
+                    empty[x, y] = owner[x, y] < 0;
+            lr.ResetDots(empty);
+        }
+
+        /// <summary>
+        /// Exit: the arrow's cell k (0 = tail) is empty once the tail has moved past it (dist &gt;= (k + 0.5) cell); its dot
+        /// fades in. revealed = cells shown so far; all = the exit is done.
+        /// </summary>
+        void RevealDots(Piece p, ref int revealed, bool all)
+        {
+            var cells = p.d.cells;
+            while (revealed < cells.Count && (all || p.dist >= (revealed + 0.5f) * cell))
+            {
+                lr.ShowDot(cells[revealed].x, cells[revealed].y);
+                revealed++;
+            }
         }
 
         void LateUpdate()
@@ -914,6 +941,7 @@ namespace ArrowPuzzle
             if (!isLong || lr == null || level == null) return;
             lr.Tick(RootPerLocal(), ScreenPerLocal());
             lr.TickGrid(Time.unscaledDeltaTime);
+            lr.TickDots(Time.unscaledDeltaTime);
             if (gridOn && Debug.isDebugBuild) GridPerf();
         }
 
@@ -1061,6 +1089,7 @@ namespace ArrowPuzzle
             float a = LongStyle.ExitEaseSeconds, s0 = LongStyle.ExitStartSpeed;
             float slideMax = Mathf.Max(0.05f, LongStyle.ExitMaxSeconds - pullTime - a * (1f - s0) * 0.5f);
             float v = Mathf.Max(LongStyle.ExitCellsPerSecond * cell, total / slideMax);
+            int revealed = 0; // cells whose dot is shown (from the tail)
             t = 0f;
             while (true)
             {
@@ -1072,7 +1101,9 @@ namespace ArrowPuzzle
                 if (s >= total) break;
                 p.dist = -back + s;
                 RenderLong(p);
+                RevealDots(p, ref revealed, false);
             }
+            RevealDots(p, ref revealed, true);
             if (perf) Debug.Log("[LongPerf] " + level.shape + " exit of a " + p.d.cells.Count + "-cell arrow: " + perfN + " frames, avg "
                       + (perfSum / Mathf.Max(1, perfN) * 1000f).ToString("F2") + " ms, worst " + (perfWorst * 1000f).ToString("F2")
                       + " ms | board vertices " + (lr.ArrowVerts + lr.TileVerts) + " (arrows " + lr.ArrowVerts + " in "

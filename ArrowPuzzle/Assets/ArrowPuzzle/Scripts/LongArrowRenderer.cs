@@ -23,6 +23,7 @@ namespace ArrowPuzzle
         public const float GridFadeIn = 0.08f, GridFadeOut = 0.25f; // s
         public const float DotCell = 0.11f, DotMinPx = 1.2f;        // board dot radius: cells, at least screen px
         public const float DotAlpha = 0.22f, DotAlphaDark = 0.28f;  // board dots: InkSoft at this alpha (dark themes: more)
+        public const float DotFadeIn = 0.2f;                         // s: a dot appears once its cell is empty
 
         /// <summary>Board dot colour for the current theme: InkSoft at DotAlpha (DotAlphaDark on dark themes: Night).</summary>
         public static Color DotColor
@@ -452,35 +453,108 @@ namespace ArrowPuzzle
     }
 
     /// <summary>
-    /// One dot at the centre of every mask cell (null mask = every cell), one mesh: a filled polygon with a 1 screen px
-    /// alpha-0 rim for anti-aliasing. The arrows' centre lines run through the dot centres. Static: the dots stay after an
-    /// arrow has left; rebuilt only when LongArrowRenderer's throttled zoom rebuild changes radius / feather.
+    /// A dot at the centre of every mask cell (null mask = every cell), one mesh: a filled polygon with a 1 screen px
+    /// alpha-0 rim for anti-aliasing. Each dot has its own alpha (0 = hidden: an arrow covers the cell). Showing / fading
+    /// a dot only rewrites the vertex colours of the mesh (Flush), never its geometry; the geometry is rebuilt only when
+    /// the size changes (LongArrowRenderer's throttled zoom rebuild) or on a new level.
     /// </summary>
     [RequireComponent(typeof(CanvasRenderer))]
     public class DotGraphic : MaskableGraphic
     {
         readonly List<Vector2> centres = new List<Vector2>();
+        int[] dotOfCell;                 // x + y * cols -> dot index, -1 = not a board cell
+        int cols;
+        float[] alpha = new float[0];    // per dot, 0..1
+        int[] firstVert = new int[0];    // per dot: index of its centre vertex
+        int vertsPerDot;
+        Mesh mesh;
+        readonly List<Vector3> verts = new List<Vector3>();
+        readonly List<Color32> colors = new List<Color32>();
+        readonly List<int> tris = new List<int>();
         public float radius = 1f, feather = 1f; // board-local units
-        public int Verts { get; private set; }
+        public int Verts { get { return verts.Count; } }
+        public int Count { get { return centres.Count; } }
 
         public void Set(bool[,] m, int cols, int rows, float cell)
         {
+            this.cols = cols;
             centres.Clear();
+            dotOfCell = new int[cols * rows];
             for (int y = 0; y < rows; y++)
                 for (int x = 0; x < cols; x++)
-                    if (m == null || m[x, y]) centres.Add(new Vector2((x + 0.5f) * cell, (y + 0.5f) * cell));
+                {
+                    bool on = m == null || m[x, y];
+                    dotOfCell[x + y * cols] = on ? centres.Count : -1;
+                    if (on) centres.Add(new Vector2((x + 0.5f) * cell, (y + 0.5f) * cell));
+                }
+            alpha = new float[centres.Count];
             SetVerticesDirty();
+        }
+
+        /// <summary>Dot index of board cell (x, y), -1 when it is not a board cell.</summary>
+        public int DotAt(int x, int y)
+        {
+            int i = x + y * cols;
+            return dotOfCell == null || x < 0 || y < 0 || x >= cols || i >= dotOfCell.Length ? -1 : dotOfCell[i];
+        }
+
+        public float GetAlpha(int dot) { return alpha[dot]; }
+
+        /// <summary>Sets one dot's alpha in the colour list (call Flush once after a batch of changes).</summary>
+        public void SetAlpha(int dot, float a)
+        {
+            if (dot < 0 || dot >= alpha.Length) return;
+            alpha[dot] = a;
+            if (dot >= firstVert.Length || verts.Count == 0) return; // not built yet: applied when it is
+            Color32 c = color;
+            c.a = (byte)Mathf.RoundToInt(color.a * 255f * Mathf.Clamp01(a));
+            int o = firstVert[dot];
+            colors[o] = c;
+            for (int k = 1; k < vertsPerDot; k += 2) colors[o + k] = c; // core ring (the rim stays at alpha 0)
+        }
+
+        /// <summary>Uploads the changed vertex colours (no geometry rebuild).</summary>
+        public void Flush()
+        {
+            if (mesh == null || verts.Count == 0) return;
+            mesh.SetColors(colors);
+            canvasRenderer.SetMesh(mesh);
         }
 
         public void Dirty() { SetVerticesDirty(); }
 
-        protected override void OnPopulateMesh(VertexHelper vh)
+        protected override void UpdateGeometry()
         {
-            vh.Clear();
-            Color32 col = color, rim = col;
+            if (mesh == null)
+            {
+                mesh = new Mesh();
+                mesh.MarkDynamic();
+                mesh.hideFlags = HideFlags.HideAndDontSave;
+            }
+            Build();
+            mesh.Clear();
+            mesh.SetVertices(verts);
+            mesh.SetColors(colors);
+            mesh.SetTriangles(tris, 0);
+            canvasRenderer.SetMesh(mesh);
+        }
+
+        protected override void OnDestroy()
+        {
+            if (mesh != null) Destroy(mesh);
+            base.OnDestroy();
+        }
+
+        void Build()
+        {
+            verts.Clear();
+            colors.Clear();
+            tris.Clear();
+            Color32 rim = color;
             rim.a = 0;
             // few segments: the dots are a few px wide; 8 is round enough there, 12 once they get big (zoomed in)
             int seg = radius / Mathf.Max(1e-4f, feather) > 4f ? 12 : 8;
+            vertsPerDot = 1 + 2 * seg;
             float rIn = Mathf.Max(radius - feather * 0.5f, radius * 0.5f), rOut = radius + feather * 0.5f;
             var dirs = new Vector2[seg];
             for (int k = 0; k < seg; k++)
@@ -488,24 +562,31 @@ namespace ArrowPuzzle
                 float a = k * Mathf.PI * 2f / seg;
                 dirs[k] = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
             }
-            foreach (var c in centres)
+            if (firstVert.Length != centres.Count) firstVert = new int[centres.Count];
+            for (int d = 0; d < centres.Count; d++)
             {
-                int o = vh.currentVertCount;
-                vh.AddVert(c, col, Vector4.zero);
+                Vector2 c = centres[d];
+                Color32 col = color;
+                col.a = (byte)Mathf.RoundToInt(color.a * 255f * Mathf.Clamp01(alpha[d]));
+                int o = verts.Count;
+                firstVert[d] = o;
+                verts.Add(c);
+                colors.Add(col);
                 for (int k = 0; k < seg; k++)
                 {
-                    vh.AddVert(c + dirs[k] * rIn, col, Vector4.zero);
-                    vh.AddVert(c + dirs[k] * rOut, rim, Vector4.zero);
+                    verts.Add(c + dirs[k] * rIn);
+                    colors.Add(col);
+                    verts.Add(c + dirs[k] * rOut);
+                    colors.Add(rim);
                 }
                 for (int k = 0; k < seg; k++)
                 {
                     int i0 = o + 1 + 2 * k, i1 = o + 1 + 2 * ((k + 1) % seg);
-                    vh.AddTriangle(o, i0, i1);           // core
-                    vh.AddTriangle(i0, i0 + 1, i1 + 1);  // rim
-                    vh.AddTriangle(i1 + 1, i1, i0);
+                    tris.Add(o); tris.Add(i0); tris.Add(i1);                 // core
+                    tris.Add(i0); tris.Add(i0 + 1); tris.Add(i1 + 1);        // rim
+                    tris.Add(i1 + 1); tris.Add(i1); tris.Add(i0);
                 }
             }
-            Verts = vh.currentVertCount;
         }
     }
 
@@ -712,6 +793,49 @@ namespace ArrowPuzzle
             foreach (var kv in halos) kv.Value.Dirty();
             press.Dirty();
             hint.Dirty();
+        }
+
+        // ------------------------------------------------------------------ dots on empty cells
+
+        readonly List<int> dotFades = new List<int>(); // dots fading in (DotFadeIn)
+
+        /// <summary>Every dot at once: shown (alpha 1) where empty[x, y], hidden where an arrow covers the cell. No fade.</summary>
+        public void ResetDots(bool[,] empty)
+        {
+            if (dots == null) return;
+            dotFades.Clear();
+            int cols = empty.GetLength(0), rows = empty.GetLength(1);
+            for (int x = 0; x < cols; x++)
+                for (int y = 0; y < rows; y++)
+                {
+                    int d = dots.DotAt(x, y);
+                    if (d >= 0) dots.SetAlpha(d, empty[x, y] ? 1f : 0f);
+                }
+            dots.Flush();
+        }
+
+        /// <summary>Cell (x, y) became empty: its dot fades in over DotFadeIn (TickDots).</summary>
+        public void ShowDot(int x, int y)
+        {
+            if (dots == null) return;
+            int d = dots.DotAt(x, y);
+            if (d < 0 || dots.GetAlpha(d) >= 1f || dotFades.Contains(d)) return;
+            dotFades.Add(d);
+        }
+
+        /// <summary>Every frame from BoardView: steps the dot fades. Nothing to do (no cost) when no dot is fading.</summary>
+        public void TickDots(float dt)
+        {
+            if (dots == null || dotFades.Count == 0) return;
+            float step = dt / LongStyle.DotFadeIn;
+            for (int i = dotFades.Count - 1; i >= 0; i--)
+            {
+                int d = dotFades[i];
+                float a = Mathf.Min(1f, dots.GetAlpha(d) + step);
+                dots.SetAlpha(d, a);
+                if (a >= 1f) dotFades.RemoveAt(i);
+            }
+            dots.Flush();
         }
 
         // ------------------------------------------------------------------ touch grid
