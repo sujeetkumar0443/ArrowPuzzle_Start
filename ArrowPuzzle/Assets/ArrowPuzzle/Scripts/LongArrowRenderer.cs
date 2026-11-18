@@ -269,6 +269,8 @@ namespace ArrowPuzzle
 
         public readonly List<Item> items = new List<Item>();
         public LongArrowRenderer owner;
+        /// <summary>Sizes when there is no owner (static previews: LevelPreview). (width multiplier, head) -> style.</summary>
+        public System.Func<float, bool, StrokeStyle> fixedStyle;
         public int Verts { get; private set; }
 
         public void Dirty() { SetVerticesDirty(); }
@@ -276,9 +278,11 @@ namespace ArrowPuzzle
         protected override void OnPopulateMesh(VertexHelper vh)
         {
             vh.Clear();
-            if (owner != null)
-                for (int i = 0; i < items.Count; i++)
-                    StrokeMesh.Add(vh, items[i].pts, owner.Style(items[i].mul, items[i].head), items[i].col);
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (owner != null) StrokeMesh.Add(vh, items[i].pts, owner.Style(items[i].mul, items[i].head), items[i].col);
+                else if (fixedStyle != null) StrokeMesh.Add(vh, items[i].pts, fixedStyle(items[i].mul, items[i].head), items[i].col);
+            }
             Verts = vh.currentVertCount;
         }
     }

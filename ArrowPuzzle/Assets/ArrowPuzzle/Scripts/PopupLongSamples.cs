@@ -28,6 +28,15 @@ namespace ArrowPuzzle
                 Ui.Size(b, 0f, 48f);
             }
 
+            // dev entry points to the Themes / Shapes screens (Step 8 puts real buttons on Home)
+            var navRow = Ui.New(card, "ScreensRow");
+            Ui.Size(navRow, 0f, 44f);
+            Ui.Row(navRow, 8f).childForceExpandWidth = true;
+            var themesBtn = Ui.Btn(navRow, "Themes screen", Theme.Panel, Theme.PanelText, 16f, 14f, Theme.PanelEdge, 3f, ScreenThemes.Open);
+            Ui.Size(themesBtn, 0f, 44f).flexibleWidth = 1f;
+            var shapesBtn = Ui.Btn(navRow, "Shapes screen", Theme.Panel, Theme.PanelText, 16f, 14f, Theme.PanelEdge, 3f, ScreenShapes.Open);
+            Ui.Size(shapesBtn, 0f, 44f).flexibleWidth = 1f;
+
             // dev theme switch: applies at once, no purchase check, does not change what the player owns
             Ui.Label(card, "Theme (dev)", 17f, Theme.InkSoft, Weight.Semi);
             for (int r = 0; r < 2; r++)

@@ -165,8 +165,26 @@ namespace ArrowPuzzle
 
         static Color Mix(Color a, Color b, float t) { var c = Color.Lerp(a, b, t); c.a = 1f; return c; }
 
-        static Sprite bgSprite;
-        static string bgSpriteFor;
+        static readonly System.Collections.Generic.Dictionary<string, Sprite> bgSprites = new System.Collections.Generic.Dictionary<string, Sprite>();
+
+        /// <summary>The vertical gradient sprite (top -> bottom) of any theme, made once per theme; null for solid themes.</summary>
+        public static Sprite BgSprite(ThemeData t)
+        {
+            if (t == null || !t.Gradient) return null;
+            Sprite sp;
+            if (bgSprites.TryGetValue(t.Id, out sp) && sp != null) return sp;
+            var tex = new Texture2D(2, 64, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            var px = new Color[2 * 64];
+            for (int y = 0; y < 64; y++)
+                px[y * 2] = px[y * 2 + 1] = Color.Lerp(t.BgBottom, t.BgTop, y / 63f); // texture y = 0 is the bottom
+            tex.SetPixels(px);
+            tex.Apply();
+            sp = Sprite.Create(tex, new Rect(0, 0, 2, 64), new Vector2(0.5f, 0.5f), 100f);
+            bgSprites[t.Id] = sp;
+            return sp;
+        }
 
         /// <summary>A full-screen background Image in the current theme: the vertical gradient sprite, or solid Bg.</summary>
         public static void PaintBg(UnityEngine.UI.Image img)
@@ -174,20 +192,7 @@ namespace ArrowPuzzle
             if (img == null) return;
             if (Current != null && Current.Gradient)
             {
-                if (bgSprite == null || bgSpriteFor != Current.Id)
-                {
-                    var tex = new Texture2D(2, 64, TextureFormat.RGBA32, false);
-                    tex.wrapMode = TextureWrapMode.Clamp;
-                    tex.filterMode = FilterMode.Bilinear;
-                    var px = new Color[2 * 64];
-                    for (int y = 0; y < 64; y++)
-                        px[y * 2] = px[y * 2 + 1] = Color.Lerp(BgBottom, Bg, y / 63f); // texture y = 0 is the bottom
-                    tex.SetPixels(px);
-                    tex.Apply();
-                    bgSprite = Sprite.Create(tex, new Rect(0, 0, 2, 64), new Vector2(0.5f, 0.5f), 100f);
-                    bgSpriteFor = Current.Id;
-                }
-                img.sprite = bgSprite;
+                img.sprite = BgSprite(Current);
                 img.type = UnityEngine.UI.Image.Type.Simple;
                 img.color = Color.white;
             }

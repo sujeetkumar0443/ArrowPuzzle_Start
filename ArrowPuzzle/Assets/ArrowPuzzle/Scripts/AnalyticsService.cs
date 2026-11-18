@@ -44,6 +44,8 @@ namespace ArrowPuzzle
         }
 
         public static void HintUsed(int level) { Log("hint_used", P("level", level)); }
+        public static void ThemeUse(string id) { Log("theme_use", P("id", id)); }
+        public static void ThemeUnlock(string id, string method) { Log("theme_unlock", P("id", id), P("method", method)); } // coins | ad
         public static void ReviveAdOffered(int level) { Log("revive_ad_offered", P("level", level)); }
         public static void ReviveAdDone(int level) { Log("revive_ad_done", P("level", level)); }
 
