@@ -55,6 +55,15 @@ namespace ArrowPuzzle
                 }
             }
 
+            // dev theme tour: all themes, 2 s each, on the screen under this list (it closes); tap again to stop
+            var tour = Ui.Btn(card, ThemeTour.Running ? "Stop theme tour" : "Theme tour", Theme.Panel, Theme.PanelText, 16f, 14f,
+                              Theme.PanelEdge, 3f, () =>
+                              {
+                                  GameApp.I.Close("PopupLongSamples");
+                                  ThemeTour.Toggle();
+                              });
+            Ui.Size(tour, 0f, 44f);
+
             var close = Ui.Btn(card, "Close", Color.clear, Theme.InkSoft, 19f, 16f, Theme.CardShadow, 0f,
                                () => GameApp.I.Close("PopupLongSamples"));
             Ui.Size(close, 0f, 44f);
