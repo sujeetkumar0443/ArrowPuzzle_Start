@@ -378,6 +378,7 @@ namespace ArrowPuzzle
         {
             skipPressT0 = Time.unscaledTime; // press feel on every tap (ApplySkipAnim)
             if (skipWaiting || Board.AnyMoving || Board.Locked) return;
+            if (LongSamplesDev.Active > 0) { ShowToast("No skip in samples"); return; } // never touches real progress
             if (Ads.IsRewardedBusy) { ShowToast(SkipToast); return; } // ShowRewarded would ignore it: never wait for it
             int id = ++skipRequest;
             int g = level;
@@ -572,6 +573,7 @@ namespace ArrowPuzzle
 
         public override void OnHide()
         {
+            LongSamplesDev.Stop(); // the dev sample route ends when the game screen goes away
             Ads.BannerHeightChanged -= OnBannerHeight;
             Save.SkipsChanged -= RefreshSkip;
             skipRequest++;       // a video still running can't skip a level on a screen that is gone
@@ -599,7 +601,20 @@ namespace ArrowPuzzle
             Time.timeScale = 1f; // safety: a level never starts frozen
             int g = Mathf.Clamp(n, 1, LevelPath.Count);
             var type = LevelPath.TypeOf(g);
-            var data = Levels.For(type, LevelPath.TypeLevelOf(g));
+            LevelData data;
+            bool sample = LongSamplesDev.Active > 0;
+            if (sample)
+            {
+                // TEMPORARY dev route: the first start plays the picked sample; the same n again = Restart; another n
+                // (PopupWin's NEXT) = the next sample. g stays a real level so the popups' level checks keep working.
+                if (!LongSamplesDev.Pending && n != level) LongSamplesDev.Next();
+                LongSamplesDev.Started();
+                // a real, unlocked level whose next one is unlocked too, so PopupWin's NEXT comes back here
+                g = Mathf.Max(1, Save.UnlockedGlobal - 1);
+                type = GameMode.Shapes;
+                data = LongSamplesDev.Load();
+            }
+            else data = Levels.For(type, LevelPath.TypeLevelOf(g));
             if (data == null)
             {
                 Debug.LogError("[ArrowPuzzle] No level " + g + " (" + type + " " + LevelPath.TypeLevelOf(g) + ")");
@@ -610,12 +625,12 @@ namespace ArrowPuzzle
             typeLevel = data.number;
             GameApp.I.CurrentMode = mode;
             GameApp.I.CurrentLevel = level;
-            levelText.text = "Level " + level;
+            levelText.text = sample ? "Long " + LongSamplesDev.Active : "Level " + level;
             RefreshHints();
 
             var info = ModeInfo.Get(mode);
             modePill.color = info.Color;
-            modeText.text = info.Name; // the mode name only (compact chip row: room for the Skip pill)
+            modeText.text = sample ? data.shape : info.Name; // the mode name only (compact chip row: room for the Skip pill)
             skipWaiting = false;
             RefreshSkip();
             skipAttentionT0 = Time.unscaledTime + SkipAttentionDelay; // one stronger bounce 1 s into every level
@@ -631,7 +646,7 @@ namespace ArrowPuzzle
             Ads.Banner(true, "ScreenGame"); // every level start (first, Restart, Next): this screen wants it
             bannerLayoutPending = false;
             ApplyBannerLayout(); // buttons and board area above the banner's current height
-            AnalyticsService.LevelStart(level, mode.ToString(), LevelPath.Difficulty(level));
+            if (!sample) AnalyticsService.LevelStart(level, mode.ToString(), LevelPath.Difficulty(level));
             CrashReporter.SetKey("level", level.ToString());
             CrashReporter.SetKey("type", mode.ToString());
             MrecSlot.Preload(MrecKind.Bonus); // the MRECs of the popups that can open from here (no-op when loading /
@@ -654,6 +669,25 @@ namespace ArrowPuzzle
         void OnWon()
         {
             timing = false; // normally already frozen at the last tap
+            if (LongSamplesDev.Active > 0)
+            {
+                // dev samples save nothing (no best time, stars, unlock); the popups still run as usual
+                GameApp.I.ResultTime = solveTime;
+                GameApp.I.ResultPrevBest = 0f;
+                GameApp.I.ResultNewBest = false;
+                GameApp.I.ResultLives = Board.Lives;
+                GameApp.I.UnlockPending = false;
+                GameApp.I.ClearedLevel = level;
+                GameApp.I.ClearedStars = Mathf.Clamp(Board.Lives, 1, 3);
+                GameApp.I.ClearedMode = mode;
+                GameApp.I.ClearedPrevStars = 0;
+                GameApp.I.ClearedUnlocked = false;
+                GameApp.I.Close("PopupPause");
+                GameApp.I.BonusMult = 0;
+                GameApp.I.SkipInterstitialOnce = false;
+                if (!GameApp.I.Open("PopupBonusSpin")) GameApp.I.Open("PopupWin");
+                return;
+            }
             float prevBest = Save.GetBestTime(mode, typeLevel);
             bool newBest = prevBest <= 0f || solveTime < prevBest;
             if (newBest) Save.SetBestTime(mode, typeLevel, solveTime);
@@ -801,6 +835,7 @@ namespace ArrowPuzzle
 
         void OnBumped()
         {
+            if (Board.IsLong) return; // long levels: no full-screen flash / shake (light haptic + ring on the board)
             if (flashFx != null) GameApp.I.StopCoroutine(flashFx);
             flashFx = GameApp.I.StartCoroutine(Flash());
             if (shakeFx != null) GameApp.I.StopCoroutine(shakeFx);

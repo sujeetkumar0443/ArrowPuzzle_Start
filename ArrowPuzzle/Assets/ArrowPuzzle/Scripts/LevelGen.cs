@@ -17,6 +17,7 @@ namespace ArrowPuzzle
         public List<PieceData> pieces = new List<PieceData>();
         public bool[,] mask;   // [x, y] true = board cell; null = full rectangle (Classic)
         public string shape;   // shape name for Shapes / Mosaic levels, null for Classic
+        public bool longArrows; // long winding arrows: BoardView draws them with LongArrowRenderer
     }
 
     /// <summary>

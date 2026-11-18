@@ -33,22 +33,50 @@ namespace ArrowPuzzle
             return Table(mode).TryGetValue(n, out e) ? Copy(e.data) : null;
         }
 
+        static readonly Dictionary<string, Dictionary<int, Entry>> fileCache = new Dictionary<string, Dictionary<int, Entry>>();
+
+        /// <summary>Level n of any level file in Resources/Levels (same format), e.g. "long_samples". Null if missing.</summary>
+        public static LevelData GetFile(string file, int n)
+        {
+            Entry e;
+            return FileTable(file).TryGetValue(n, out e) ? Copy(e.data) : null;
+        }
+
+        /// <summary>Number of levels in a level file in Resources/Levels.</summary>
+        public static int CountInFile(string file)
+        {
+            return FileTable(file).Count;
+        }
+
+        static Dictionary<int, Entry> FileTable(string file)
+        {
+            Dictionary<int, Entry> d;
+            if (fileCache.TryGetValue(file, out d)) return d;
+            d = new Dictionary<int, Entry>();
+            fileCache[file] = d;
+            Load(file, d);
+            return d;
+        }
+
         static Dictionary<int, Entry> Table(GameMode mode)
         {
             Dictionary<int, Entry> d;
             if (cache.TryGetValue(mode, out d)) return d;
             d = new Dictionary<int, Entry>();
             cache[mode] = d;
+            Load(mode == GameMode.Shapes ? "shapes" : "mosaic", d);
+            return d;
+        }
 
-            string file = mode == GameMode.Shapes ? "shapes" : "mosaic";
+        static void Load(string file, Dictionary<int, Entry> d)
+        {
             var ta = Resources.Load<TextAsset>("Levels/" + file);
             if (ta == null)
             {
                 Debug.LogError("[ArrowPuzzle] Missing level file Resources/Levels/" + file + ".txt");
-                return d;
+                return;
             }
             Parse(ta.text, d);
-            return d;
         }
 
         static void Parse(string text, Dictionary<int, Entry> d)

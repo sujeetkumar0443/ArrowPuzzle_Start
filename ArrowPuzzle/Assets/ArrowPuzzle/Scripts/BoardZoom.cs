@@ -16,7 +16,7 @@ namespace ArrowPuzzle
     public class BoardZoom : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IInitializePotentialDragHandler,
                              IDragHandler, IScrollHandler
     {
-        const float MinZoom = 1f, MaxZoom = 3f;
+        const float MinZoom = 1f, MaxZoom = 5f;
         const float SnapToMin = 1.02f;                          // a settle below this goes back to exactly 1x
         const float TapSlop = 12f;                              // design px
         const float DoubleTapTime = 0.35f, DoubleTapDist = 40f; // s between releases, design px
@@ -82,6 +82,7 @@ namespace ArrowPuzzle
             }
             StopAnim();
             tapLive = false;
+            board.ClearPress();
             lastTapTime = -10f;
             zoom = MinZoom;
             pan = Vector2.zero;
@@ -94,6 +95,7 @@ namespace ArrowPuzzle
             fingers.Clear();
             pos.Clear();
             tapLive = rightDown = false;
+            if (board != null) board.ClearPress();
             anim = null; // coroutines stop with the object
         }
 
@@ -104,6 +106,7 @@ namespace ArrowPuzzle
             fingers.Clear();
             pos.Clear();
             tapLive = rightDown = false;
+            board.ClearPress();
         }
 
         void Update()
@@ -136,10 +139,12 @@ namespace ArrowPuzzle
                 tapId = e.pointerId;
                 tapLive = true;
                 tapStart = e.position;
+                board.PressAt(e.position, Cam()); // long levels: the arrow this tap would pick shows pressed
             }
             else
             {
                 tapLive = false; // a second finger never lets the first one tap
+                board.ClearPress();
                 BeginPinch();
             }
         }
@@ -170,6 +175,7 @@ namespace ArrowPuzzle
             {
                 if ((e.position - tapStart).magnitude <= TapSlop * ScreenPerD()) return;
                 tapLive = false;
+                board.ClearPress(); // a pan, not a tap
                 prev = tapStart; // the board catches up with the finger
             }
             if (zoom > MinZoom) Pan(Local(e.position) - Local(prev));
@@ -186,6 +192,7 @@ namespace ArrowPuzzle
             if (!pos.ContainsKey(e.pointerId)) return;
 
             bool tap = tapLive && e.pointerId == tapId;
+            if (e.pointerId == tapId) board.ClearPress();
             fingers.Remove(e.pointerId);
             pos.Remove(e.pointerId);
             if (fingers.Count >= 2) BeginPinch(); // a third finger lifted the pinch pair

@@ -81,6 +81,15 @@ namespace ArrowPuzzle
         int[] pickStamp; // per piece: last tap that measured it (avoids a HashSet per tap)
         int pickId;
 
+        // long winding arrows (LevelData.longArrows): drawn by LongArrowRenderer instead of one ArrowGraphic per piece
+        LongArrowRenderer lr;
+        bool isLong;
+        Canvas rootCanvas;
+        RectTransform rootRt;
+
+        /// <summary>True while a long-arrow level is loaded (no screen flash / shake, light haptic).</summary>
+        public bool IsLong { get { return isLong; } }
+
         void Awake()
         {
             rt = (RectTransform)transform;
@@ -106,6 +115,25 @@ namespace ArrowPuzzle
             owner = new int[data.cols, data.rows];
             for (int x = 0; x < data.cols; x++) for (int y = 0; y < data.rows; y++) owner[x, y] = -1;
 
+            isLong = data.longArrows;
+            if (isLong && lr == null) lr = new LongArrowRenderer(rt);
+            if (lr != null) lr.SetActive(isLong);
+            if (!isLong) LoadTilesAndDots(data);
+
+            for (int i = 0; i < data.pieces.Count; i++) BuildPiece(i, data.pieces[i]);
+            pickStamp = new int[pieces.Count];
+            if (isLong) BuildLong();
+
+            lives = MaxLives;
+            remaining = pieces.Count;
+            Locked = false;
+            if (RemainingChanged != null) RemainingChanged(remaining);
+            if (LivesChanged != null) LivesChanged(lives);
+        }
+
+        /// <summary>Old levels: a rounded tile Image under every mask cell and a dot Image per cell.</summary>
+        void LoadTilesAndDots(LevelData data)
+        {
             // shaped boards: a rounded beige tile under every mask cell (all tiles first, then all dots, so each batches)
             if (data.mask != null)
             {
@@ -145,30 +173,25 @@ namespace ArrowPuzzle
                     extras.Add(dot.gameObject);
                 }
             }
-
-            for (int i = 0; i < data.pieces.Count; i++) BuildPiece(i, data.pieces[i]);
-            pickStamp = new int[pieces.Count];
-
-            lives = MaxLives;
-            remaining = pieces.Count;
-            Locked = false;
-            if (RemainingChanged != null) RemainingChanged(remaining);
-            if (LivesChanged != null) LivesChanged(lives);
         }
 
         void BuildPiece(int i, PieceData pd)
         {
             var p = new Piece { index = i, d = pd };
 
-            p.g = NewArrow("Piece" + i);
-            p.rt = p.g.rectTransform;
-            p.g.thickness = Mathf.Max(8f, cell * 0.196f);
-            p.g.headSize = cell * 0.6f;
-            p.g.widthFactor = 0.56f;
-            p.baseColor = Theme.Palette[pd.colorIndex % Theme.Palette.Length];
+            if (isLong) p.baseColor = LongStyle.Arrow(pd.colorIndex);
+            else
+            {
+                p.g = NewArrow("Piece" + i);
+                p.rt = p.g.rectTransform;
+                p.g.thickness = Mathf.Max(8f, cell * 0.196f);
+                p.g.headSize = cell * 0.6f;
+                p.g.widthFactor = 0.56f;
+                p.baseColor = Theme.Palette[pd.colorIndex % Theme.Palette.Length];
+                p.g.color = p.baseColor;
+            }
             foreach (var c in pd.cells) p.center += CenterOf(c);
             p.center /= pd.cells.Count;
-            p.g.color = p.baseColor;
 
             p.dirV = new Vector2(pd.dir.x, pd.dir.y);
             p.ext = new List<Vector2>();
@@ -190,14 +213,14 @@ namespace ArrowPuzzle
 
             foreach (var c in pd.cells) owner[c.x, c.y] = i;
             pieces.Add(p);
-            Render(p);
+            if (!isLong) Render(p);
         }
 
         /// <summary>An ArrowGraphic filling the board (pivot = board origin), not a raycast target.</summary>
-        ArrowGraphic NewArrow(string name)
+        ArrowGraphic NewArrow(string name, Transform parent = null)
         {
             var go = new GameObject(name, typeof(RectTransform));
-            go.transform.SetParent(transform, false);
+            go.transform.SetParent(parent != null ? parent : transform, false);
             var art = (RectTransform)go.transform;
             art.anchorMin = Vector2.zero;
             art.anchorMax = Vector2.one;
@@ -234,7 +257,9 @@ namespace ArrowPuzzle
             foreach (var g in extras) if (g != null) Destroy(g);
             pieces.Clear();
             extras.Clear();
+            if (lr != null) lr.Clear();
             level = null;
+            isLong = false;
         }
 
         // ------------------------------------------------------------------ input
@@ -259,6 +284,7 @@ namespace ArrowPuzzle
         /// <summary>Nearest arrow (distance to its centre line) within max(0.55 cell, 14 design px) of the tap.</summary>
         Piece Pick(Vector2 lp)
         {
+            if (isLong) return PickLong(lp);
             float reachDist = Mathf.Max(0.55f * cell, Theme.D(14f));
             int reach = Mathf.CeilToInt(reachDist / cell) + 1;
             int cx = Mathf.FloorToInt(lp.x / cell), cy = Mathf.FloorToInt(lp.y / cell);
@@ -352,7 +378,7 @@ namespace ArrowPuzzle
                 p.busy = true;
                 foreach (var c in p.d.cells) owner[c.x, c.y] = -1;
                 SoundFx.PlayExit();
-                p.fx = StartCoroutine(ExitRoutine(p));
+                p.fx = StartCoroutine(isLong ? LongExitRoutine(p) : ExitRoutine(p));
                 RaiseTapped();
                 return;
             }
@@ -360,7 +386,7 @@ namespace ArrowPuzzle
             Piece blocker;
             int k = CellsAhead(p, out blocker);
             p.busy = true;
-            p.fx = StartCoroutine(WrongMoveRoutine(p, blocker, k));
+            p.fx = StartCoroutine(isLong ? LongWrongMoveRoutine(p, blocker, k) : WrongMoveRoutine(p, blocker, k));
             RaiseTapped();
         }
 
@@ -378,7 +404,11 @@ namespace ArrowPuzzle
             if (lives <= 0) return;
             lives = Mathf.Max(0, lives - 1);
             Sfx.Play(Sfx.Id.Error);
-            if (Save.Haptics) VibrateSafe();
+            if (Save.Haptics)
+            {
+                if (isLong) LightHaptic();
+                else VibrateSafe();
+            }
             if (LivesChanged != null) LivesChanged(lives);
             if (Bumped != null) Bumped();
             if (lives <= 0)
@@ -679,7 +709,7 @@ namespace ArrowPuzzle
         public void PlayCollapse(Action onDone)
         {
             if (collapseFx != null) StopCoroutine(collapseFx);
-            collapseFx = StartCoroutine(CollapseRoutine(onDone));
+            collapseFx = StartCoroutine(isLong ? LongCollapseRoutine(onDone) : CollapseRoutine(onDone));
         }
 
         /// <summary>Every remaining arrow back to its normal position, rotation, colour and alpha.</summary>
@@ -688,6 +718,7 @@ namespace ArrowPuzzle
             if (collapseFx != null) StopCoroutine(collapseFx);
             if (reviveFx != null) StopCoroutine(reviveFx);
             collapseFx = reviveFx = null;
+            if (lr != null && isLong) lr.ResetLayer();
             foreach (var p in pieces)
             {
                 if (p.removed || p.g == null) continue;
@@ -806,7 +837,7 @@ namespace ArrowPuzzle
                 if (!p.removed && !p.moving && !p.busy && Check(p) == State.Free) free.Add(p);
             if (free.Count == 0) return false;
             var pick = free[UnityEngine.Random.Range(0, free.Count)];
-            hintFx = StartCoroutine(HintRoutine(pick));
+            hintFx = StartCoroutine(isLong ? LongHintRoutine(pick) : HintRoutine(pick));
             Sfx.Play(Sfx.Id.Hint);
             return true;
         }
@@ -815,7 +846,8 @@ namespace ArrowPuzzle
         public void ReviveLife()
         {
             ResetCollapse();
-            if (pieces.Count > 0)
+            if (isLong && pieces.Count > 0) reviveFx = StartCoroutine(LongReviveRoutine());
+            else if (pieces.Count > 0)
             {
                 foreach (var p in pieces) if (!p.removed && p.g != null) Pose(p, 0f, 0f, 0f, ReviveScaleFrom);
                 reviveFx = StartCoroutine(ReviveRoutine());
@@ -823,6 +855,345 @@ namespace ArrowPuzzle
             lives = 1;
             Locked = false;
             if (LivesChanged != null) LivesChanged(lives);
+        }
+
+        // ================================================================== long winding arrows (LongArrowRenderer)
+
+        const float LongReachD = 18f;      // hit reach around a line, design px (screen-fixed)
+        const float LongSpeedCells = 40f;  // exit / slide speed, cells per second
+        const float LongAccel = 0.08f;     // s to reach full speed
+
+        void BuildLong()
+        {
+            var rest = new List<List<Vector2>>(pieces.Count);
+            var colors = new List<Color>(pieces.Count);
+            foreach (var p in pieces)
+            {
+                var pts = new List<Vector2>(p.d.cells.Count);
+                foreach (var c in p.d.cells) pts.Add(CenterOf(c));
+                rest.Add(pts);
+                colors.Add(p.baseColor);
+            }
+            lr.Build(level, cell, rest, colors);
+            lr.Tick(RootPerLocal(), ScreenPerLocal());
+            if (Debug.isDebugBuild) StartCoroutine(LogVertsLater()); // editor and development builds
+        }
+
+        void LateUpdate()
+        {
+            if (isLong && lr != null && level != null) lr.Tick(RootPerLocal(), ScreenPerLocal());
+        }
+
+        /// <summary>Root canvas units per board-local unit (board scale x zoom).</summary>
+        float RootPerLocal()
+        {
+            if (rootCanvas == null)
+            {
+                var c = GetComponentInParent<Canvas>();
+                rootCanvas = c != null ? c.rootCanvas : null;
+                rootRt = rootCanvas != null ? (RectTransform)rootCanvas.transform : null;
+            }
+            if (rootRt == null) return 1f;
+            return transform.lossyScale.x / Mathf.Max(1e-6f, rootRt.lossyScale.x);
+        }
+
+        float ScreenPerLocal()
+        {
+            float r = RootPerLocal();
+            return r * (rootCanvas != null ? rootCanvas.scaleFactor : 1f);
+        }
+
+        /// <summary>
+        /// Nearest line within LongReachD design px (on screen, whatever the zoom), measured to the rounded centre line
+        /// at rest; within 1 design px the arrow whose head is closer wins. owner[,] only gives the candidates.
+        /// </summary>
+        Piece PickLong(Vector2 lp)
+        {
+            float rpl = RootPerLocal();
+            float reach = Theme.D(LongReachD) / rpl, tie = Theme.D(1f) / rpl;
+            int r = Mathf.CeilToInt(reach / cell) + 1;
+            int cx = Mathf.FloorToInt(lp.x / cell), cy = Mathf.FloorToInt(lp.y / cell);
+            pickId++;
+
+            Piece bp = null;
+            float best = float.MaxValue, bestHead = float.MaxValue;
+            for (int dx = -r; dx <= r; dx++)
+            {
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    int nx = cx + dx, ny = cy + dy;
+                    if (!InGrid(nx, ny)) continue;
+                    int w = owner[nx, ny];
+                    if (w < 0 || pickStamp[w] == pickId) continue;
+                    pickStamp[w] = pickId;
+                    var p = pieces[w];
+                    if (p.removed || p.moving) continue;
+                    float d = lr.Distance(w, lp);
+                    if (d > reach) continue;
+                    float hd = Vector2.Distance(lp, CenterOf(p.d.Head));
+                    if (bp == null || d < best - tie || (d <= best + tie && hd < bestHead))
+                    {
+                        bp = p;
+                        best = d;
+                        bestHead = hd;
+                    }
+                }
+            }
+            return bp;
+        }
+
+        /// <summary>Finger down on the board (BoardZoom): the arrow a tap here would pick is drawn lighter. Long levels only.</summary>
+        public void PressAt(Vector2 screenPos, Camera cam)
+        {
+            if (!isLong || lr == null || level == null || Locked) return;
+            Vector2 lp;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(rt, screenPos, cam, out lp)) { lr.Press(-1); return; }
+            var p = Pick(lp);
+            lr.Press(p != null && !p.busy ? p.index : -1);
+        }
+
+        /// <summary>The finger moved into a pan / pinch, lifted, or the board reset.</summary>
+        public void ClearPress()
+        {
+            if (lr != null) lr.Press(-1);
+        }
+
+        void RenderLong(Piece p)
+        {
+            float s0 = p.baseOff + p.dist;
+            Poly.Slice(p.ext, p.cum, s0, s0 + p.bodyLen, tmp);
+            lr.Move(p.index, tmp);
+        }
+
+        /// <summary>
+        /// Free arrow: pull back, then slide along its own path and straight out of the head at LongSpeedCells (constant
+        /// after a short ramp) until its tail has left the grid. Its cells left owner[,] at the tap.
+        /// </summary>
+        IEnumerator LongExitRoutine(Piece p)
+        {
+            lr.Press(-1);
+            lr.BeginMove(p.index);
+            bool perf = Debug.isDebugBuild; // [LongPerf] in the editor and development builds
+            float perfSum = 0f, perfWorst = 0f;
+            int perfN = 0;
+            float back = 0.16f * cell;
+            const float pullTime = 0.11f;
+            float t = 0f;
+            while (t < pullTime)
+            {
+                yield return null;
+                float dt = Time.unscaledDeltaTime;
+                perfSum += dt; perfWorst = Mathf.Max(perfWorst, dt); perfN++;
+                t += dt;
+                p.dist = -back * EaseOutCubic(Mathf.Clamp01(t / pullTime));
+                RenderLong(p);
+            }
+
+            float total = back + p.edgeDist + p.bodyLen + 0.5f * cell; // the tail (and its cap) past the grid edge
+            float v = LongSpeedCells * cell;
+            t = 0f;
+            while (true)
+            {
+                yield return null;
+                float dt = Time.unscaledDeltaTime;
+                perfSum += dt; perfWorst = Mathf.Max(perfWorst, dt); perfN++;
+                t += dt;
+                float s = t < LongAccel ? v * t * t / (2f * LongAccel) : v * (t - LongAccel * 0.5f);
+                if (s >= total) break;
+                p.dist = -back + s;
+                RenderLong(p);
+            }
+            if (perf) Debug.Log("[LongPerf] " + level.shape + " exit of a " + p.d.cells.Count + "-cell arrow: " + perfN + " frames, avg "
+                      + (perfSum / Mathf.Max(1, perfN) * 1000f).ToString("F2") + " ms, worst " + (perfWorst * 1000f).ToString("F2")
+                      + " ms | board vertices " + (lr.ArrowVerts + lr.TileVerts) + " (arrows " + lr.ArrowVerts + " in "
+                      + lr.BatchCount + " batches, tiles " + lr.TileVerts + "), " + RootPerLocal().ToString("F2")
+                      + " root units per board unit, " + (remaining - 1) + " arrows left");
+            lr.EndMove(p.index, true);
+            p.fx = null;
+            Finish(p);
+        }
+
+        /// <summary>Blocked arrow: slides up to the blocker, impact (life, red tint, blocker halo, ring), springs back.</summary>
+        IEnumerator LongWrongMoveRoutine(Piece p, Piece blocker, int k)
+        {
+            lr.Press(-1);
+            lr.BeginMove(p.index);
+            float adv = ((k - 1) + 0.3f) * cell;
+            float slide = 0.08f + adv / (LongSpeedCells * cell);
+            float t = 0f;
+            while (t < slide)
+            {
+                t += Time.unscaledDeltaTime;
+                p.dist = adv * Mathf.Pow(Mathf.Clamp01(t / slide), 1.8f);
+                RenderLong(p);
+                yield return null;
+            }
+
+            LoseLife();
+            if (p.tint != null) StopCoroutine(p.tint);
+            p.tint = StartCoroutine(LongTintRoutine(p));
+            if (blocker != null && !blocker.removed)
+            {
+                if (blocker.glow != null) StopCoroutine(blocker.glow);
+                blocker.glow = StartCoroutine(LongHaloRoutine(blocker));
+            }
+            StartCoroutine(LongRingRoutine(CenterOf(p.d.Head) + p.dirV * ((k - 0.5f) * cell)));
+
+            const float recoil = 0.62f;
+            t = 0f;
+            while (t < recoil)
+            {
+                t += Time.unscaledDeltaTime;
+                float s = Mathf.Min(t, recoil);
+                p.dist = adv * Mathf.Exp(-7f * s) * Mathf.Cos(2f * Mathf.PI * 2f * s);
+                RenderLong(p);
+                yield return null;
+            }
+            p.dist = 0f;
+            lr.EndMove(p.index, false);
+            p.busy = false;
+            p.fx = null;
+        }
+
+        IEnumerator LongTintRoutine(Piece p)
+        {
+            const float dur = 0.56f;
+            float t = 0f;
+            while (t < dur && !p.removed)
+            {
+                t += Time.unscaledDeltaTime;
+                lr.SetColor(p.index, Color.Lerp(LongStyle.Error, p.baseColor, EaseOutCubic(Mathf.Clamp01(t / dur))));
+                yield return null;
+            }
+            if (!p.removed) lr.SetColor(p.index, p.baseColor);
+            p.tint = null;
+        }
+
+        IEnumerator LongHaloRoutine(Piece b)
+        {
+            const float dur = 0.64f;
+            float t = 0f;
+            while (t < dur && !b.removed)
+            {
+                t += Time.unscaledDeltaTime;
+                lr.Halo(b.index, 0.45f * (1f - Mathf.Clamp01(t / dur)));
+                yield return null;
+            }
+            lr.Halo(b.index, 0f);
+            b.glow = null;
+        }
+
+        /// <summary>Small red ring at the contact point, on the Fx canvas (does not re-batch the static arrows).</summary>
+        IEnumerator LongRingRoutine(Vector2 center)
+        {
+            var ring = NewArrow("Ring", lr.FxRoot);
+            ring.drawHead = false;
+            extras.Add(ring.gameObject);
+            float size = Mathf.Max(cell, Theme.D(12f) / RootPerLocal());
+            const int seg = 32;
+            var pts = new List<Vector2>(seg + 1);
+            const float dur = 0.42f;
+            float t = 0f;
+            while (t < dur)
+            {
+                t += Time.unscaledDeltaTime;
+                float u = Mathf.Clamp01(t / dur);
+                float r = size * (0.18f + 0.6f * EaseOutCubic(u));
+                pts.Clear();
+                for (int i = 0; i <= seg; i++)
+                {
+                    float a = i / (float)seg * Mathf.PI * 2f;
+                    pts.Add(center + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r);
+                }
+                ring.thickness = Mathf.Max(0.01f, lr.LineWidth * 1.5f * (1f - u));
+                var c = LongStyle.Error;
+                c.a = (1f - u) * 0.8f;
+                ring.color = c;
+                ring.SetPoints(pts);
+                yield return null;
+            }
+            Kill(ring.gameObject);
+        }
+
+        IEnumerator LongHintRoutine(Piece p)
+        {
+            float t = 0f;
+            while (t < 1.8f && !p.removed && !p.moving)
+            {
+                t += Time.deltaTime;
+                lr.Hint(p.index, (Mathf.Sin(t * 10f) + 1f) * 0.5f);
+                yield return null;
+            }
+            lr.Hint(-1, 0f);
+            hintFx = null;
+        }
+
+        /// <summary>Loss: the whole arrow layer jitters, turns grey and falls / fades (tiles stay). Same timings as before.</summary>
+        IEnumerator LongCollapseRoutine(Action onDone)
+        {
+            float end = FallT0 + FallSpread + FallTime;
+            float t = 0f, lastGrey = -1f;
+            bool done = false;
+            lr.Press(-1);
+            lr.Hint(-1, 0f);
+            while (t < end || !done)
+            {
+                t += Time.unscaledDeltaTime;
+                float jitter = t < JitterT1 ? Mathf.Clamp01(t / JitterRamp) : 0f;
+                float dx = jitter > 0f ? Mathf.Sin(t * JitterFreq) * JitterAmp * jitter : 0f;
+                float gk = Mathf.Clamp01((t - GreyT0) / (GreyT1 - GreyT0));
+                if (t >= GreyT0 && gk != lastGrey && lastGrey < 1f) { lr.TintAll(LongStyle.Grey, gk); lastGrey = gk; }
+                float x = Mathf.Clamp01((t - FallT0) / (FallSpread + FallTime));
+                float g = Mathf.SmoothStep(0f, 1f, x);
+                float alpha = x > FallFadeFrom ? 1f - (x - FallFadeFrom) / (1f - FallFadeFrom) : 1f;
+                lr.SetLayer(new Vector2(Theme.D(dx), -Theme.D(g * g * FallDist)), 1f, alpha);
+                if (!done && t >= CollapseDoneT)
+                {
+                    done = true;
+                    if (onDone != null) onDone();
+                }
+                yield return null;
+            }
+            collapseFx = null;
+        }
+
+        IEnumerator LongReviveRoutine()
+        {
+            float t = 0f;
+            while (t < ReviveScaleTime)
+            {
+                t += Time.unscaledDeltaTime;
+                lr.SetLayer(Vector2.zero, Mathf.Lerp(ReviveScaleFrom, 1f, EaseOutCubic(Mathf.Clamp01(t / ReviveScaleTime))), 1f);
+                yield return null;
+            }
+            lr.SetLayer(Vector2.zero, 1f, 1f);
+            reviveFx = null;
+        }
+
+        /// <summary>Short tick (about 20 ms) instead of Handheld.Vibrate's long buzz. Android only; never throws.</summary>
+        static void LightHaptic()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using (var up = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var act = up.GetStatic<AndroidJavaObject>("currentActivity"))
+                using (var vib = act.Call<AndroidJavaObject>("getSystemService", "vibrator"))
+                {
+                    if (vib != null) vib.Call("vibrate", 20L);
+                }
+            }
+            catch (Exception) { }
+#endif
+        }
+
+        IEnumerator LogVertsLater()
+        {
+            yield return null; // the meshes are built at the end of the load frame
+            if (!isLong || level == null) yield break;
+            Debug.Log("[LongPerf] " + level.shape + " loaded: " + pieces.Count + " arrows, cell " + cell.ToString("F1")
+                      + " units, board vertices " + (lr.ArrowVerts + lr.TileVerts) + " (arrows " + lr.ArrowVerts + " in "
+                      + lr.BatchCount + " batches, tiles " + lr.TileVerts + ")");
         }
     }
 }

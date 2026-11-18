@@ -495,6 +495,15 @@ namespace ArrowPuzzle
         void OnSkipReward(int id)
         {
             if (id != request || !GameApp.I.IsOpen<PopupLose>()) return; // left already: nothing is spent
+            if (LongSamplesDev.Active > 0)
+            {
+                // dev sample: no skip is spent and no real level is passed; just replay the sample
+                SetPending(Pending.None);
+                GameApp.I.Close("PopupLose");
+                var g0 = GameApp.I.Get<ScreenGame>();
+                if (g0 != null) g0.Restart();
+                return;
+            }
             int g = GameApp.I.CurrentLevel;
             if (Save.SkipsLeft <= 0) { SetPending(Pending.None); RefreshSkip(); return; }
             Save.UseSkip();

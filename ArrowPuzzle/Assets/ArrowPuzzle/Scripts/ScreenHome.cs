@@ -74,6 +74,13 @@ namespace ArrowPuzzle
             BannerPlaceholder.Create(Root); // just above the background, under everything else
             BuildTopBar();
             mark = Wordmark.Build(Root); // end state, identical to the splash's last frame
+            if (Debug.isDebugBuild) // editor and development builds only
+            {
+                // TEMPORARY dev route: hold the ARROW word for 1 s -> long-arrow samples
+                var hold = Ui.Img(mark.Root, "LongSamplesHold", null, Color.clear);
+                Ui.PlaceD(hold.rectTransform, Ui.C, new Vector2(0f, 44f), new Vector2(280f, 84f));
+                hold.gameObject.AddComponent<LongPressTrigger>().onHold = () => GameApp.I.Open("PopupLongSamples");
+            }
             BuildRuler();
             BuildPlay();
             BuildSkips();
