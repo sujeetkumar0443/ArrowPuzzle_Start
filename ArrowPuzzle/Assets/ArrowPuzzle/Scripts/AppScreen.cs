@@ -36,5 +36,10 @@ namespace ArrowPuzzle
 
         /// <summary>Android back button / Escape. Return true if handled.</summary>
         public virtual bool OnBack() { return false; }
+
+        /// <summary>
+        /// Before GameApp destroys this screen to rebuild it (theme change): destroy anything Build created outside Root.
+        /// </summary>
+        public virtual void Teardown() { }
     }
 }

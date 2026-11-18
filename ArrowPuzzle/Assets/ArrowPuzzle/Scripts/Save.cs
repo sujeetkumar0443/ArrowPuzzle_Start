@@ -155,6 +155,47 @@ namespace ArrowPuzzle
         /// <summary>Raised after every coin change (the result screen's coin chip can listen).</summary>
         public static event System.Action CoinsChanged;
 
+        /// <summary>Takes n coins if there are enough (raises CoinsChanged); false and nothing spent otherwise.</summary>
+        public static bool SpendCoins(int n, string reason = null)
+        {
+            if (n <= 0) return true;
+            if (Coins < n) return false;
+            AddCoins(-n, reason ?? "spent");
+            return true;
+        }
+
+        // ------------------------------------------------------------------ themes
+
+        const string ThemeKey = "ap_theme", ThemesOwnedKey = "ap_themes_owned";
+
+        /// <summary>The chosen theme id (default cream). Setting it only saves; Theme.Apply switches the look.</summary>
+        public static string ThemeId
+        {
+            get
+            {
+                string id = PlayerPrefs.GetString(ThemeKey, Themes.Default);
+                return Themes.Exists(id) && IsThemeOwned(id) ? id : Themes.Default;
+            }
+            set { PlayerPrefs.SetString(ThemeKey, value); PlayerPrefs.Save(); }
+        }
+
+        /// <summary>Paper and cream are owned by everyone; the others once unlocked (ap_themes_owned, a comma list).</summary>
+        public static bool IsThemeOwned(string id)
+        {
+            if (Themes.Exists(id) && Themes.Get(id).OwnedByDefault) return true;
+            foreach (var s in PlayerPrefs.GetString(ThemesOwnedKey, "").Split(','))
+                if (s == id) return true;
+            return false;
+        }
+
+        public static void UnlockTheme(string id)
+        {
+            if (!Themes.Exists(id) || IsThemeOwned(id)) return;
+            string list = PlayerPrefs.GetString(ThemesOwnedKey, "");
+            PlayerPrefs.SetString(ThemesOwnedKey, list.Length == 0 ? id : list + "," + id);
+            PlayerPrefs.Save();
+        }
+
         public static bool Sound
         {
             get { return PlayerPrefs.GetInt("ap_sound", 1) == 1; }

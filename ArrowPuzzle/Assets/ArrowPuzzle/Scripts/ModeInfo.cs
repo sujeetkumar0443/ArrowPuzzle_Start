@@ -16,12 +16,13 @@ namespace ArrowPuzzle
         }
 
         static Entry[] table;
+        static ThemeData tableFor; // rebuilt when the theme changes (no stale colour copies)
 
         static Entry[] Table
         {
             get
             {
-                if (table == null)
+                if (table == null || tableFor != Theme.Current)
                 {
                     table = new[]
                     {
@@ -29,6 +30,7 @@ namespace ArrowPuzzle
                         Make("Shapes", "Fill the shape with arrows", Theme.ModeGold, Theme.ModeGoldEdge, 0.22f),
                         Make("Mosaic", "Huge packed boards, plan ahead", Theme.Accent, Theme.AccentShadow, 0.16f),
                     };
+                    tableFor = Theme.Current;
                 }
                 return table;
             }

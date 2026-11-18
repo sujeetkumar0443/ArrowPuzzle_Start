@@ -223,7 +223,7 @@ namespace ArrowPuzzle
 
         static RectTransform ShimmerStripe(Transform parent, float peakAlpha)
         {
-            var c = Theme.Card;
+            var c = Theme.OnColor; // white shine on any theme (Card is dark in night)
             c.a = peakAlpha;
             var img = Img(parent, "Stripe", ShimmerSprite, c);
             img.raycastTarget = false;

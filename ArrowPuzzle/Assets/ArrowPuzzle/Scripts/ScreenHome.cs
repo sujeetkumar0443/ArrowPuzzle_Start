@@ -41,7 +41,7 @@ namespace ArrowPuzzle
         // ---- vertical spacing
         const float BottomPad = 16f, BannerGap = 8f, PlayToSkips = 24f;
 
-        static readonly Color SkipUsed = Theme.InkSoft;
+        static Color SkipUsed { get { return Theme.InkSoft; } } // read live (theme)
         static readonly Color CoinEdge = Theme.Hex("#D98E00");
         static readonly Vector3[] corners = new Vector3[4];
         static readonly float[] SlotX = { -FarX, -NearX, 0f, NearX, FarX };
@@ -108,8 +108,10 @@ namespace ArrowPuzzle
             var bg = Ui.Img(backdrop, "Bg", null, Theme.Bg);
             bg.raycastTarget = false;
             Ui.Fill(bg.rectTransform);
+            Theme.PaintBg(bg); // solid or the theme's gradient
 
-            var dots = Ui.Img(backdrop, "Dots", Theme.DotTile, Theme.CardShadow);
+            var dots = Ui.Img(backdrop, "Dots", Theme.DotTile, Theme.Dot);
+            dots.gameObject.SetActive(Theme.HasDots);
             dots.type = Image.Type.Tiled;
             dots.pixelsPerUnitMultiplier = 64f / (34f * Theme.K);
             dots.raycastTarget = false;
@@ -121,19 +123,19 @@ namespace ArrowPuzzle
         void BuildTopBar()
         {
             // settings: ink rounded square, white gear
-            var sImg = Rounded(Root, "Settings", Theme.Ink, SettingsR);
+            var sImg = Rounded(Root, "Settings", Theme.Panel, SettingsR);
             settings = sImg.rectTransform;
             MakeButton(sImg, () => GameApp.I.Show("ScreenSettings"));
-            var gear = Icons.Make(settings, Icon.Gear, Theme.Card, GearD);
+            var gear = Icons.Make(settings, Icon.Gear, Theme.PanelText, GearD);
             Ui.PlaceD(gear, Ui.C, Vector2.zero, new Vector2(GearD, GearD));
 
             // coin pill: ink, gold coin, count (width follows the count, see SetCoins)
-            var pill = Rounded(Root, "Coins", Theme.Ink, PillH * 0.5f);
+            var pill = Rounded(Root, "Coins", Theme.Panel, PillH * 0.5f);
             pill.raycastTarget = false;
             coinPill = pill.rectTransform;
             var coin = Coin(coinPill, CoinD);
             Ui.PlaceD(coin, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(PillPadL, 0f), new Vector2(CoinD, CoinD));
-            coins = Ui.Label(coinPill, "0", CoinFont, Theme.Card, Weight.Bold, TextAnchor.MiddleLeft);
+            coins = Ui.Label(coinPill, "0", CoinFont, Theme.PanelText, Weight.Bold, TextAnchor.MiddleLeft);
             Ui.PlaceD(coins.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(PillPadL + CoinD + PillGap, 0f), new Vector2(120f, PillH));
         }
 
@@ -166,7 +168,7 @@ namespace ArrowPuzzle
                     edge.effectDistance = new Vector2(0f, -Theme.D(SmallEdge));
                     edge.useGraphicAlpha = false;
                 }
-                s.number = Ui.Label(s.rt, "", big ? BigFont : SmallFont, big ? Theme.Card : Theme.Ink, Weight.Bold);
+                s.number = Ui.Label(s.rt, "", big ? BigFont : SmallFont, big ? Theme.AccentText : Theme.Ink, Weight.Bold);
                 Ui.PlaceD(s.number.rectTransform, Ui.C, Vector2.zero, new Vector2(d, d));
                 var lockRt = Icons.Make(s.rt, Icon.Lock, Theme.LockedLevelIcon, LockD);
                 Ui.PlaceD(lockRt, Ui.C, Vector2.zero, new Vector2(LockD, LockD));
@@ -218,9 +220,9 @@ namespace ArrowPuzzle
             var face = Rounded(press, "Face", Theme.Accent, PlayR);
             Ui.PlaceD(face.rectTransform, Ui.TC, Vector2.zero, new Vector2(PlayW, PlayH));
 
-            levelLabel = Ui.Label(face.rectTransform, "LEVEL 1", LevelFont, Theme.Card, Weight.Semi);
+            levelLabel = Ui.Label(face.rectTransform, "LEVEL 1", LevelFont, Theme.AccentText, Weight.Semi);
             Ui.PlaceD(levelLabel.rectTransform, Ui.C, new Vector2(0f, LevelY), new Vector2(PlayW, LevelFont * 1.4f));
-            var play = Ui.Label(face.rectTransform, "PLAY", PlayFont, Theme.Card, Weight.Bold);
+            var play = Ui.Label(face.rectTransform, "PLAY", PlayFont, Theme.AccentText, Weight.Bold);
             Ui.PlaceD(play.rectTransform, Ui.C, new Vector2(0f, PlayY), new Vector2(PlayW, PlayFont * 1.3f));
 
             var btn = press.gameObject.AddComponent<Button>();
@@ -236,11 +238,11 @@ namespace ArrowPuzzle
 
         void BuildSkips()
         {
-            var row = Rounded(Root, "SkipsToday", Theme.Ink, SkipsH * 0.5f);
+            var row = Rounded(Root, "SkipsToday", Theme.Panel, SkipsH * 0.5f);
             row.raycastTarget = false;
             skipsRow = row.rectTransform;
 
-            skipsText = Ui.Label(skipsRow, "SKIPS TODAY", SkipsFont, Theme.Card, Weight.Semi, TextAnchor.MiddleLeft);
+            skipsText = Ui.Label(skipsRow, "SKIPS TODAY", SkipsFont, Theme.PanelText, Weight.Semi, TextAnchor.MiddleLeft);
             Ui.PlaceD(skipsText.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(SkipsPad, 0f), new Vector2(140f, SkipsH));
 
             for (int i = 0; i < MaxSkipDots; i++)

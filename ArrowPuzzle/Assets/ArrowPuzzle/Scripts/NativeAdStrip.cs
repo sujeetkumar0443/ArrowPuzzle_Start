@@ -18,8 +18,8 @@ namespace ArrowPuzzle
     {
         const float Timeout = 8f;      // s of waiting for the ad
         const float FadeTime = 0.15f;  // s
-        static readonly Color Base = Theme.Hex("#EFEAE0");  // the placeholder strip (grey)
-        static readonly Color Bars = Theme.Hex("#E6DFD0");  // skeleton bars (as NativeAdSlot / BannerPlaceholder)
+        static Color Base { get { return Theme.AdBase; } }  // the placeholder strip (grey); theme
+        static Color Bars { get { return Theme.Skeleton; } }  // skeleton bars (as NativeAdSlot / BannerPlaceholder)
 
         enum Phase { Idle, Waiting, Shown, Fading, Done }
 

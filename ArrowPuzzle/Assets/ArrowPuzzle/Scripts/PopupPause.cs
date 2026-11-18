@@ -29,7 +29,7 @@ namespace ArrowPuzzle
             Ui.Label(titleBox, "Paused", 36f, Theme.Ink, Weight.Bold);
 
             // 2. RESUME
-            var resume = Ui.Btn(card.transform, "RESUME", Theme.Accent, Theme.Card, 24f, 24f, Theme.AccentShadow, 5f,
+            var resume = Ui.Btn(card.transform, "RESUME", Theme.Accent, Theme.AccentText, 24f, 24f, Theme.AccentShadow, 5f,
                                 () => GameApp.I.Close("PopupPause"), Icon.Play, 24f);
             Ui.Size(resume, 0f, 72f);
 

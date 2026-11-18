@@ -179,8 +179,7 @@ namespace ArrowPuzzle
         {
             var p = new Piece { index = i, d = pd };
 
-            if (isLong) p.baseColor = LongStyle.Arrow(pd.colorIndex);
-            else
+            if (!isLong)
             {
                 p.g = NewArrow("Piece" + i);
                 p.rt = p.g.rectTransform;
@@ -192,6 +191,12 @@ namespace ArrowPuzzle
             }
             foreach (var c in pd.cells) p.center += CenterOf(c);
             p.center /= pd.cells.Count;
+            if (isLong)
+            {
+                // theme colour: Random = from (level, arrow index); Zones = from the arrow's centre (x right, y down, 0..1)
+                var theme = Theme.Current ?? Themes.Get(Themes.Default);
+                p.baseColor = Themes.ArrowColor(theme, level.number, i, p.center.x / (level.cols * cell), 1f - p.center.y / (level.rows * cell));
+            }
 
             p.dirV = new Vector2(pd.dir.x, pd.dir.y);
             p.ext = new List<Vector2>();

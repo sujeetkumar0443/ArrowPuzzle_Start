@@ -67,7 +67,7 @@ namespace ArrowPuzzle
         const float End = ConfettiT0 + ConfettiLife + 0.05f;                                // last one-shot thing done
 
         // ---- colours (UI_SPEC palette via Theme; the rest only exist on this screen)
-        static readonly Color RoundEdge = Theme.Hex("#D9D1C1");   // Home button's raised edge (as the ad frame)
+        static Color RoundEdge { get { return Theme.ListEdge; } } // Home button's raised edge (as the ad frame); theme
         static readonly Color Cheek = new Color(1f, 122f / 255f, 102f / 255f, 0.75f); // #FF7A66 at 75 %
         static readonly Color SparkleColor = Theme.Hex("#FFC82E");
         static readonly Color CoinEdge = Theme.Hex("#D98E00");
@@ -119,6 +119,7 @@ namespace ArrowPuzzle
         {
             // full screen: cream over the whole screen (blocks taps to the game), content inside the safe area
             var bg = Ui.Img(Root, "Bg", null, Theme.Bg);
+            Theme.PaintBg(bg);
             Ui.Fill(bg.rectTransform);
             safe = Ui.New(Root, "Safe");
             Ui.FitSafeArea(safe);
@@ -163,7 +164,7 @@ namespace ArrowPuzzle
             Ui.PlaceD(banner, Ui.TC, Ui.C, Vector2.zero, new Vector2(BannerW, BannerH));
             AddEdge(bImg, Theme.AccentShadow, BannerEdgeD);
             bannerGroup = bImg.gameObject.AddComponent<CanvasGroup>();
-            Ui.Fill(Ui.Label(banner, "LEVEL COMPLETE!", BannerFont, Theme.Card, Weight.Bold).rectTransform);
+            Ui.Fill(Ui.Label(banner, "LEVEL COMPLETE!", BannerFont, Theme.AccentText, Weight.Bold).rectTransform);
 
             bigRing = Ring(content, Ui.TC, Vector2.zero);
 
@@ -208,10 +209,10 @@ namespace ArrowPuzzle
             homeRt = (RectTransform)home.transform;
             Ui.PlaceD(homeRt, Ui.TC, new Vector2(-(ButtonW - HomeW) * 0.5f, -NextTop), new Vector2(HomeW, NextH));
 
-            var next = Ui.Btn(buttons, "NEXT LEVEL", Theme.Accent, Theme.Card, 24f, 20f, Theme.AccentShadow, NextEdgeD, OnNextTap);
+            var next = Ui.Btn(buttons, "NEXT LEVEL", Theme.Accent, Theme.AccentText, 24f, 20f, Theme.AccentShadow, NextEdgeD, OnNextTap);
             nextRt = (RectTransform)next.transform;
             Ui.PlaceD(nextRt, Ui.TC, new Vector2((ButtonW - NextW) * 0.5f, -NextTop), new Vector2(NextW, NextH));
-            var arrow = Icons.Make(next.transform, Icon.ArrowRight, Theme.Card, 24f, 3f);
+            var arrow = Icons.Make(next.transform, Icon.ArrowRight, Theme.AccentText, 24f, 3f);
             Ui.Size(arrow, 24f, 24f);
             Ui.AddShimmer(nextRt, 20f, ButtonsT1); // first sweep once the button is in
 

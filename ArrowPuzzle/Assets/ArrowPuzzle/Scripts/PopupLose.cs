@@ -52,11 +52,11 @@ namespace ArrowPuzzle
         const float DotsY = 316f, CDotsY = 270f;
         const float RowTop = 336f, CRowTop = 286f;
 
-        static readonly Color BannerEdge = Theme.Hex("#3E4753");
+        static Color BannerEdge { get { return Theme.PanelEdge; } }
         static readonly Color GoldEdge = Theme.Hex("#C98410");
-        static readonly Color DotUsed = Theme.Hex("#D9D2C4");
+        static Color DotUsed { get { return Theme.DotUsed; } }
         static readonly Color TearColor = Theme.Hex("#7CC4F2");
-        static readonly Color RoundEdge = Theme.Hex("#D9D1C1"); // round Home button's raised edge (as the ad frame)
+        static Color RoundEdge { get { return Theme.ListEdge; } } // round Home button's raised edge (as the ad frame); theme
 
         enum Pending { None, Revive, Skip, Bonus }
 
@@ -89,6 +89,7 @@ namespace ArrowPuzzle
         {
             // full screen: cream over the whole screen (blocks taps to the game), content inside the safe area
             var bg = Ui.Img(Root, "Bg", null, Theme.Bg);
+            Theme.PaintBg(bg);
             Ui.Fill(bg.rectTransform);
             safe = Ui.New(Root, "Safe");
             Ui.FitSafeArea(safe);
@@ -98,12 +99,12 @@ namespace ArrowPuzzle
             cardGroup = card.gameObject.AddComponent<CanvasGroup>();
 
             // 1. slate ribbon
-            var bImg = Ui.Img(card, "Banner", Theme.Rounded, Theme.InkSoft, 12f);
+            var bImg = Ui.Img(card, "Banner", Theme.Rounded, Theme.Panel, 12f);
             bImg.raycastTarget = false;
             banner = bImg.rectTransform;
             Ui.PlaceD(banner, Ui.TC, Ui.C, new Vector2(0f, -BannerCY), new Vector2(BannerW, BannerH));
             AddEdge(bImg, BannerEdge, BannerEdgeD);
-            Ui.Fill(Ui.Label(banner, "LEVEL FAILED", BannerFont, Theme.Card, Weight.Bold).rectTransform);
+            Ui.Fill(Ui.Label(banner, "LEVEL FAILED", BannerFont, Theme.PanelText, Weight.Bold).rectTransform);
 
             // 2. three sad grey stars (left, middle, right)
             float[] tilt = { SideTilt, 0f, -SideTilt };
@@ -138,7 +139,7 @@ namespace ArrowPuzzle
             home.name = "Btn_Home";
             homeRt = (RectTransform)home.transform;
             Ui.PlaceD(homeRt, Ui.TC, new Vector2(-(ButtonW - HomeW) * 0.5f, -RowTop), new Vector2(HomeW, RowH));
-            var retry = Ui.Btn(rowBox, "TRY AGAIN", Theme.Accent, Theme.Card, RowFont, 20f, Theme.AccentShadow, RowEdgeD, () =>
+            var retry = Ui.Btn(rowBox, "TRY AGAIN", Theme.Accent, Theme.AccentText, RowFont, 20f, Theme.AccentShadow, RowEdgeD, () =>
             {
                 GameApp.I.Close("PopupLose");
                 var game = GameApp.I.Get<ScreenGame>();
@@ -206,7 +207,7 @@ namespace ArrowPuzzle
             var row = Ui.Row(skipBadge.rectTransform, 0f);
             int pad = Mathf.RoundToInt(Theme.D(BadgePadX));
             row.padding = new RectOffset(pad, pad, 0, 0);
-            skipBadgeText = Ui.Label(skipBadge.transform, "", BadgeFont, Theme.Card, Weight.Bold);
+            skipBadgeText = Ui.Label(skipBadge.transform, "", BadgeFont, Theme.OnColor, Weight.Bold);
 
             Ui.AddShimmer(skipRt, BtnH * 0.5f, ButtonsT0 + ButtonsTime + 1.3f); // out of step with the revive's sweep
             skipGroup = b.gameObject.AddComponent<CanvasGroup>();
@@ -234,11 +235,11 @@ namespace ArrowPuzzle
         /// <summary>Dark pill over the dots row (covers nothing tappable), fades in, holds, fades out.</summary>
         void BuildToast()
         {
-            var pill = Ui.Img(card, "Toast", Theme.Rounded, Theme.Ink, ToastH * 0.5f);
+            var pill = Ui.Img(card, "Toast", Theme.Rounded, Theme.Panel, ToastH * 0.5f);
             pill.raycastTarget = false;
             toast = pill.rectTransform;
             Ui.PlaceD(toast, Ui.TC, Ui.C, new Vector2(0f, -DotsY), new Vector2(ToastW, ToastH));
-            Ui.Fill(Ui.Label(toast, ToastText, 16f, Theme.Card, Weight.Semi).rectTransform);
+            Ui.Fill(Ui.Label(toast, ToastText, 16f, Theme.PanelText, Weight.Semi).rectTransform);
             toastGroup = pill.gameObject.AddComponent<CanvasGroup>();
             toastGroup.blocksRaycasts = false;
             toastGroup.alpha = 0f;

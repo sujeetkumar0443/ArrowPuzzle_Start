@@ -35,6 +35,7 @@ namespace ArrowPuzzle
         protected override void Build()
         {
             var bg = Ui.Img(Root, "Bg", null, Theme.Bg);
+            Theme.PaintBg(bg);
             bg.raycastTarget = false;
             Ui.Fill(bg.rectTransform);
             bg.rectTransform.offsetMin = new Vector2(0f, -Theme.D(400f)); // also under the insets
@@ -245,7 +246,7 @@ namespace ArrowPuzzle
             var box = Ui.Img(row, "IconBox", Theme.Rounded, iconBg, IconBoxRadius);
             box.raycastTarget = false;
             Ui.PlaceD(box.rectTransform, new Vector2(0f, 0.5f), new Vector2(RowPad, 0f), new Vector2(IconBox, IconBox));
-            Icons.Make(box.transform, icon, Theme.Card, IconD); // centered in the square
+            Icons.Make(box.transform, icon, Theme.OnColor, IconD); // centered in the square (white on the fixed icon colour)
 
             float labelX = RowPad + IconBox + LabelGap;
             var label = Ui.Label(row, text, LabelD, Theme.Ink, Weight.Semi, TextAnchor.MiddleLeft);

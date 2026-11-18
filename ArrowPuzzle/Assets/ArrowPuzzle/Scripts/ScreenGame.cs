@@ -127,10 +127,10 @@ namespace ArrowPuzzle
         /// <summary>Small ink pill above the buttons ("+3 hints"), hidden until Toast() runs. Never takes taps.</summary>
         void BuildToast()
         {
-            var pill = Ui.Img(Root, "Toast", Theme.Rounded, Theme.Ink, ToastH * 0.5f);
+            var pill = Ui.Img(Root, "Toast", Theme.Rounded, Theme.Panel, ToastH * 0.5f);
             pill.raycastTarget = false;
             Ui.PlaceD(pill.rectTransform, Ui.BC, new Vector2(0f, ToastY), new Vector2(ToastW, ToastH));
-            toastText = Ui.Label(pill.transform, "", 18f, Theme.Card, Weight.Bold);
+            toastText = Ui.Label(pill.transform, "", 18f, Theme.PanelText, Weight.Bold);
             Ui.Fill(toastText.rectTransform);
             toast = pill.gameObject.AddComponent<CanvasGroup>();
             toast.blocksRaycasts = false;
@@ -299,8 +299,8 @@ namespace ArrowPuzzle
             Ui.Row(row, 8f, TextAnchor.MiddleLeft);
             row.gameObject.AddComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            modePill = Chip(row, 14f, ModeInfo.Get(GameMode.Classic).Color);
-            modeText = Ui.Label(modePill.transform, "", 16f, Theme.Card, Weight.Semi);
+            modePill = Chip(row, 14f, Theme.Teal);
+            modeText = Ui.Label(modePill.transform, "", 16f, Theme.OnColor, Weight.Semi);
 
             var count = Chip(row, 14f, Theme.Card);
             var icon = Icons.Make(count.transform, Icon.ArrowRight, Theme.InkSoft, 18f, 2.6f);
@@ -318,7 +318,7 @@ namespace ArrowPuzzle
         /// </summary>
         void BuildSkip()
         {
-            var b = Ui.Btn(Root, "Skip", SkipPurple, Theme.Card, SkipFont, SkipH * 0.5f, SkipPurpleEdge, SkipEdgeD,
+            var b = Ui.Btn(Root, "Skip", SkipPurple, Theme.OnColor, SkipFont, SkipH * 0.5f, SkipPurpleEdge, SkipEdgeD,
                            OnSkipTap, Icon.Play, SkipIconD);
             skipRt = (RectTransform)b.transform;
             // pivot right-middle: every scale keeps the right edge on the margin and grows left / up / down only
@@ -338,7 +338,7 @@ namespace ArrowPuzzle
             skipShadow = b.GetComponent<Shadow>();
             skipLabel = b.GetComponentInChildren<Text>();
 
-            skipBadge = Ui.Img(skipRt, "Badge", WinArt.Disc, Theme.Card);
+            skipBadge = Ui.Img(skipRt, "Badge", WinArt.Disc, Theme.OnColor);
             skipBadge.raycastTarget = false;
             Ui.Size(skipBadge, SkipBadgeD, SkipBadgeD);
             skipBadgeText = Ui.Label(skipBadge.transform, "4", 13f, SkipPurple, Weight.Bold);
@@ -359,7 +359,7 @@ namespace ArrowPuzzle
             bool any = left > 0;
             skipImg.color = any ? SkipPurple : Theme.Gold;
             if (skipShadow != null) skipShadow.effectColor = any ? SkipPurpleEdge : SkipGoldEdge;
-            Color fg = any ? Theme.Card : Theme.Ink;
+            Color fg = any ? Theme.OnColor : Theme.Ink;
             skipLabel.color = fg;
             foreach (var img in skipIcon) img.color = fg;
             skipLabel.text = skipWaiting ? "..." : any ? "Skip" : "+" + SkipBonus + " skips";
@@ -491,11 +491,11 @@ namespace ArrowPuzzle
             Ui.PlaceD(hintRt, Ui.BL, new Vector2(Pad, BtnBottom), new Vector2(w, BtnH));
 
             // badge: circle 30 sticking out 6 right / 10 up of the top-right corner
-            var badge = Ui.Img(hint.transform, "Badge", Theme.Circle, Theme.Ink);
+            var badge = Ui.Img(hint.transform, "Badge", Theme.Circle, Theme.Panel);
             badge.raycastTarget = false;
             badge.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
             Ui.PlaceD(badge.rectTransform, Ui.TR, new Vector2(6f, 10f), new Vector2(30f, 30f));
-            hintCount = Ui.Label(badge.transform, "", 16f, Theme.Card, Weight.Bold);
+            hintCount = Ui.Label(badge.transform, "", 16f, Theme.PanelText, Weight.Bold);
             Ui.Fill(hintCount.rectTransform);
 
             var restart = Ui.Btn(Root, "Restart", Theme.Card, Theme.Ink, 22f, 24f, Theme.CardShadow, 4f, Restart, Icon.Restart, 26f);
@@ -590,6 +590,13 @@ namespace ArrowPuzzle
         {
             GameApp.I.Open("PopupPause");
             return true;
+        }
+
+        /// <summary>Theme rebuild: the flash and the lose tint live on the canvas, outside Root.</summary>
+        public override void Teardown()
+        {
+            if (flash != null) Object.Destroy(flash.gameObject);
+            if (loseTint != null) Object.Destroy(loseTint.gameObject);
         }
 
         /// <summary>

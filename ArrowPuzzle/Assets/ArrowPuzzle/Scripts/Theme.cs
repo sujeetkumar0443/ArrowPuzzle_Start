@@ -24,7 +24,7 @@ namespace ArrowPuzzle
         public static Color Teal = Hex("#2EC4B6");
         public static Color TealShadow = Hex("#1F8E84");
         public static Color CardShadow = Hex("#E3DACB");
-        public static Color Error = Hex("#E63946");
+        public static Color Error = Hex("#FF3B3B");      // fixed (every theme): error / blocked red
         public static Color ErrorDeep = Hex("#CD2234"); // outer edge of the wrong-move screen flash
         public static Color HeartLost = Hex("#D9D3C7");
         public static Color Gold = Hex("#FFB703");
@@ -34,7 +34,7 @@ namespace ArrowPuzzle
         public static Color Dot = Hex("#DDD5C6");
         public static Color Tile = Hex("#F5F0E6"); // board cell tile on shaped (masked) boards
         public static Color SwitchOff = Hex("#BDB5A6");
-        public static Color Hint = Hex("#1D3557");
+        public static Color Hint = Hex("#FFC400");       // fixed (every theme): hint gold
         // Settings lists (ScreenSettings)
         public static Color SectionLabel = Hex("#66717E"); // "GAME" / "MORE" section labels
         public static Color ListEdge = Hex("#D9D1C1");     // bottom edge of the list card
@@ -71,6 +71,132 @@ namespace ArrowPuzzle
             Hex("#FF6B6B"), Hex("#2EC4B6"), Hex("#5C6BC0"), Hex("#F4A300"),
             Hex("#9B5DE5"), Hex("#52B788"), Hex("#F15BB5"), Hex("#00A6FB"),
         };
+
+        // ------------------------------------------------------------------ theme tokens (Apply; the defaults are cream)
+
+        /// <summary>The theme in use (ThemeData). Apply(id) switches it and raises Changed.</summary>
+        public static ThemeData Current { get; private set; }
+
+        /// <summary>Raised after Apply (GameApp rebuilds the screens, so every screen reads the new tokens).</summary>
+        public static event System.Action Changed;
+
+        public static Color BgBottom = Hex("#F4EFE6");    // Bg = top colour; equal to BgBottom = solid
+        public static Color AccentDark = Hex("#B23F1D");  // = AccentShadow
+        public static Color AccentText = Hex("#FFFFFF");  // text / icons on Accent
+        public static Color Panel = Hex("#26323F");       // dark buttons and pills (Settings, coin pill, SKIPS)
+        public static Color PanelEdge = Hex("#12181F");
+        public static Color PanelText = Hex("#FFFFFF");
+        public static bool HasDots = true;                // background dot pattern (Dot) or none
+        public static Color[] Lines = { Hex("#E4572E"), Hex("#2EC4B6"), Hex("#FFB703"), Hex("#9B5DE5"), Hex("#3B82F6"), Hex("#3DBB5E") };
+        public static LineMode LineMode = LineMode.Random;
+        public static bool Glow;
+        // derived greys (exact old values for cream, mixed from Card / Ink for the others)
+        public static Color Skeleton = Hex("#E6DFD0");     // ad placeholders, skeleton bars
+        public static Color SkeletonEdge = Hex("#DCD4C3");
+        public static Color AdBase = Hex("#EFEAE0");       // native ad strip placeholder
+        public static Color DotUsed = Hex("#D9D2C4");      // used-skip dots
+
+        // fixed colours (never change with the theme)
+        public static readonly Color OnColor = Hex("#FFFFFF");   // text / icons on fixed coloured buttons (teal, purple, gold)
+        public static readonly Color Success = Hex("#3DBB5E");
+        public static readonly Color CoinGold = Hex("#FFB703");
+
+        /// <summary>
+        /// Switches to theme id (unknown = cream): copies its tokens into the static colour fields above, derives the
+        /// secondary greys and, with notify, raises Changed. Does not save the choice (Save.ThemeId) or check ownership.
+        /// </summary>
+        public static void Apply(string id, bool notify = true)
+        {
+            var t = Themes.Get(id);
+            Current = t;
+            Bg = t.BgTop;
+            BgBottom = t.BgBottom;
+            Card = t.Card;
+            Ink = t.Ink;
+            InkSoft = t.InkSoft;
+            Accent = t.Accent;
+            AccentShadow = AccentDark = t.AccentDark;
+            AccentText = t.AccentText;
+            Panel = t.Panel;
+            PanelEdge = t.PanelEdge;
+            PanelText = t.PanelText;
+            Tile = t.Tile;
+            HasDots = t.HasDots;
+            Dot = t.HasDots ? t.Dots : Mix(Bg, Ink, 0.08f);
+            Lines = t.Lines;
+            LineMode = t.LineMode;
+            Glow = t.Glow;
+            Dim = new Color(t.Dark ? 0f : Ink.r, t.Dark ? 0f : Ink.g, t.Dark ? 0f : Ink.b, t.Dark ? 0.7f : 0.62f);
+
+            if (t.Id == Themes.Default)
+            {
+                // cream: exactly the colours the game had before themes
+                CardShadow = Hex("#E3DACB"); Locked = Hex("#E3DACB"); HeartLost = Hex("#D9D3C7"); SwitchOff = Hex("#BDB5A6");
+                SectionLabel = Hex("#66717E"); ListEdge = Hex("#D9D1C1"); ListPress = Hex("#F7F3EA"); ListDivider = Hex("#F0EADD");
+                Chevron = Hex("#B8B1A2"); FootNote = Hex("#9A9384"); RulerTrack = Hex("#E6DFD0");
+                LockedLevelFill = Hex("#EDE7DA"); LockedLevelEdge = Hex("#DCD3C1"); LockedLevelIcon = Hex("#B3A994");
+                Skeleton = Hex("#E6DFD0"); SkeletonEdge = Hex("#DCD4C3"); AdBase = Hex("#EFEAE0"); DotUsed = Hex("#D9D2C4");
+            }
+            else
+            {
+                // light themes: Card mixed towards Ink; dark themes: lighter tints of Card, and edges darker than Card
+                Color edge = t.Dark ? Mix(Card, Color.black, 0.35f) : Mix(Card, Ink, 0.13f);
+                CardShadow = edge;
+                ListEdge = t.Dark ? Mix(Card, Color.black, 0.4f) : Mix(Card, Ink, 0.16f);
+                Locked = Mix(Card, Ink, 0.13f);
+                HeartLost = Mix(Card, Ink, 0.18f);
+                SwitchOff = Mix(Card, Ink, 0.3f);
+                SectionLabel = InkSoft;
+                ListPress = Mix(Card, Ink, 0.04f);
+                ListDivider = Mix(Card, Ink, 0.07f);
+                Chevron = Mix(Card, Ink, 0.32f);
+                FootNote = Mix(Card, Ink, 0.45f);
+                RulerTrack = Mix(Bg, Ink, 0.1f);
+                LockedLevelFill = Mix(Card, Ink, 0.08f);
+                LockedLevelEdge = Mix(Card, Ink, 0.16f);
+                LockedLevelIcon = Mix(Card, Ink, 0.35f);
+                Skeleton = Mix(Card, Ink, 0.1f);
+                SkeletonEdge = Mix(Card, Ink, 0.14f);
+                AdBase = Mix(Card, Ink, 0.06f);
+                DotUsed = Mix(Card, Ink, 0.18f);
+            }
+            if (notify && Changed != null) Changed();
+        }
+
+        static Color Mix(Color a, Color b, float t) { var c = Color.Lerp(a, b, t); c.a = 1f; return c; }
+
+        static Sprite bgSprite;
+        static string bgSpriteFor;
+
+        /// <summary>A full-screen background Image in the current theme: the vertical gradient sprite, or solid Bg.</summary>
+        public static void PaintBg(UnityEngine.UI.Image img)
+        {
+            if (img == null) return;
+            if (Current != null && Current.Gradient)
+            {
+                if (bgSprite == null || bgSpriteFor != Current.Id)
+                {
+                    var tex = new Texture2D(2, 64, TextureFormat.RGBA32, false);
+                    tex.wrapMode = TextureWrapMode.Clamp;
+                    tex.filterMode = FilterMode.Bilinear;
+                    var px = new Color[2 * 64];
+                    for (int y = 0; y < 64; y++)
+                        px[y * 2] = px[y * 2 + 1] = Color.Lerp(BgBottom, Bg, y / 63f); // texture y = 0 is the bottom
+                    tex.SetPixels(px);
+                    tex.Apply();
+                    bgSprite = Sprite.Create(tex, new Rect(0, 0, 2, 64), new Vector2(0.5f, 0.5f), 100f);
+                    bgSpriteFor = Current.Id;
+                }
+                img.sprite = bgSprite;
+                img.type = UnityEngine.UI.Image.Type.Simple;
+                img.color = Color.white;
+            }
+            else
+            {
+                img.sprite = null;
+                img.color = Bg;
+            }
+        }
 
         public static Sprite Rounded, Circle, Heart, Star, Triangle, DotTile;
 

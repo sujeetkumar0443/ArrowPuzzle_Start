@@ -17,8 +17,8 @@ namespace ArrowPuzzle
         const float Radius = 12f, Border = 1f;
 
         // colours that only exist here (a light neutral on the cream screens, a barely visible edge)
-        static readonly Color Fill = Theme.Hex("#E6DFD0");
-        static readonly Color Edge = Theme.Hex("#DCD4C3");
+        static Color Fill { get { return Theme.Skeleton; } }
+        static Color Edge { get { return Theme.SkeletonEdge; } }
 
         RectTransform bar;
         CanvasGroup group;

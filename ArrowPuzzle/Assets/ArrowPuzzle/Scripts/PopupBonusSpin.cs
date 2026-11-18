@@ -27,6 +27,7 @@ namespace ArrowPuzzle
         static readonly Color BulbColor = Theme.Hex("#FFF8E8");
         static readonly Color SparkleColor = Theme.Hex("#FFC82E");
         static readonly Color CoinEdge = Theme.Hex("#D98E00");
+        static readonly Color WheelInk = Theme.Hex("#26323F"); // wheel labels / shadows on the fixed wheel colours
         static readonly int[] Mult = { 1, 2, 8, 10, 8, 2, 1 };
 
         // ---- sizes (design px; wheel parts in WinArt's 115 geometry, scaled to radius 135)
@@ -162,11 +163,11 @@ namespace ArrowPuzzle
             {
                 float a = (180f - (k + 0.5f) * SliceDeg) * Mathf.Deg2Rad;
                 bool gold = Mult[k] == 10;
-                var l = Ui.Label(wheel, Mult[k] + "x", LabelFont, gold ? Theme.Ink : Theme.Card, Weight.Bold);
+                var l = Ui.Label(wheel, Mult[k] + "x", LabelFont, gold ? WheelInk : Theme.OnColor, Weight.Bold);
                 Ui.PlaceD(l.rectTransform, Ui.C, Ui.C, new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * LabelR, new Vector2(64f, 34f));
                 var sh = l.gameObject.AddComponent<Shadow>();
                 sh.effectDistance = new Vector2(0f, -Theme.D(1.5f));
-                sh.effectColor = gold ? new Color(1f, 1f, 1f, 0.45f) : new Color(Theme.Ink.r, Theme.Ink.g, Theme.Ink.b, 0.6f);
+                sh.effectColor = gold ? new Color(1f, 1f, 1f, 0.45f) : new Color(WheelInk.r, WheelInk.g, WheelInk.b, 0.6f);
                 labels[k] = l;
             }
 
@@ -204,7 +205,7 @@ namespace ArrowPuzzle
         {
             claimBox = Ui.New(safe, "ClaimBox");
             Ui.PlaceD(claimBox, Ui.TC, Ui.C, new Vector2(0f, -ClaimY), new Vector2(ClaimW, ClaimH));
-            var claim = Ui.Btn(claimBox, "Claim x10", Theme.Teal, Theme.Card, ClaimFont, ClaimH * 0.5f, Theme.TealShadow, ClaimEdgeD,
+            var claim = Ui.Btn(claimBox, "Claim x10", Theme.Teal, Theme.OnColor, ClaimFont, ClaimH * 0.5f, Theme.TealShadow, ClaimEdgeD,
                                OnClaim, Icon.Play, ClaimIconD);
             Ui.Fill((RectTransform)claim.transform);
             claimLabel = claim.GetComponentInChildren<Text>();
@@ -215,7 +216,7 @@ namespace ArrowPuzzle
             row.padding = new RectOffset(Mathf.RoundToInt(Theme.D(5f)), Mathf.RoundToInt(Theme.D(11f)), 0, 0);
             Ui.Size(pill, 0f, 32f);
             Ui.Size(Coin(pill.transform, 24f), 24f, 24f);
-            claimAmount = Ui.Label(pill.transform, "", 19f, Theme.Card, Weight.Bold);
+            claimAmount = Ui.Label(pill.transform, "", 19f, Theme.OnColor, Weight.Bold);
             claimPill = pill.gameObject;
 
             Ui.AddShimmer((RectTransform)claim.transform, ClaimH * 0.5f, OpenDone);
@@ -227,7 +228,7 @@ namespace ArrowPuzzle
         {
             noBox = Ui.New(safe, "NoThanksBox");
             Ui.PlaceD(noBox, Ui.TC, Ui.C, new Vector2(0f, -NoY), new Vector2(WinArt.NoThanksW, WinArt.NoThanksH));
-            var no = Ui.Btn(noBox, "No thanks", Color.white, Theme.Card, NoFont, WinArt.NoThanksH * 0.5f, Color.clear, 0f,
+            var no = Ui.Btn(noBox, "No thanks", Color.white, Theme.OnColor, NoFont, WinArt.NoThanksH * 0.5f, Color.clear, 0f,
                             OnNoThanks, null, 24f, Weight.Semi);
             var img = no.GetComponent<Image>();
             img.sprite = WinArt.NoThanksPill; // colours baked into the sprite

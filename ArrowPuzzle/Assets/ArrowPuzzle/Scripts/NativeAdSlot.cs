@@ -18,8 +18,8 @@ namespace ArrowPuzzle
         const float Radius = 22f, EdgeW = 3f;
 
         // colours that only exist here: the frame edge and the skeleton bars (as BannerPlaceholder)
-        static readonly Color Edge = Theme.Hex("#D9D1C1");
-        static readonly Color Bars = Theme.Hex("#E6DFD0");
+        static Color Edge { get { return Theme.ListEdge; } }
+        static Color Bars { get { return Theme.Skeleton; } }
 
         enum Phase { Idle, Waiting, Shown, Fading, Done }
 

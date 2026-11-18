@@ -56,6 +56,8 @@ namespace ArrowPuzzle
 
         RectTransform popupLayer;
         Rect lastSafe;
+        UnityEngine.UI.Image canvasBg;
+        Camera appCamera;
 
         class Entry
         {
@@ -87,6 +89,7 @@ namespace ArrowPuzzle
             Application.targetFrameRate = 60;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Theme.Init();
+            Theme.Apply(Save.ThemeId, false); // the saved theme before anything is built (the Splash is built in cream)
             Sfx.Init(gameObject);
             MusicPlayer.Init(gameObject);
             AppStartup.Begin(); // UMP consent (Firebase starts in parallel) -> Ads.Init as soon as ads may be requested; never blocks or throws
@@ -107,6 +110,7 @@ namespace ArrowPuzzle
             var go = new GameObject("Camera");
             go.transform.SetParent(transform, false);
             var cam = go.AddComponent<Camera>();
+            appCamera = cam;
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = Theme.Bg;
             cam.orthographic = true;
@@ -143,6 +147,8 @@ namespace ArrowPuzzle
             var bg = Ui.Img(CanvasRoot, "Bg", null, Theme.Bg);
             bg.raycastTarget = false;
             Ui.Fill(bg.rectTransform);
+            Theme.PaintBg(bg); // solid or the theme's vertical gradient
+            canvasBg = bg;
 
             SafeRoot = Ui.New(CanvasRoot, "Safe");
             Ui.Fill(SafeRoot);
@@ -163,9 +169,69 @@ namespace ArrowPuzzle
 
         void CreateScreens()
         {
-            foreach (var t in typeof(AppScreen).Assembly.GetTypes())
+            // the Splash always stays cream; every other screen is built in the current theme
+            string theme = Theme.Current != null ? Theme.Current.Id : Themes.Default;
+            foreach (var t in ScreenTypes())
             {
-                if (t.IsAbstract || !typeof(AppScreen).IsAssignableFrom(t)) continue;
+                if (t != typeof(ScreenSplash)) continue;
+                Theme.Apply(Themes.Default, false);
+                BuildEntry(t);
+                Theme.Apply(theme, false);
+            }
+            foreach (var t in ScreenTypes())
+                if (t != typeof(ScreenSplash)) BuildEntry(t);
+            Theme.Changed += OnThemeChanged;
+        }
+
+        static List<Type> ScreenTypes()
+        {
+            var list = new List<Type>();
+            foreach (var t in typeof(AppScreen).Assembly.GetTypes())
+                if (!t.IsAbstract && typeof(AppScreen).IsAssignableFrom(t)) list.Add(t);
+            return list;
+        }
+
+        /// <summary>
+        /// Theme switched: every screen and popup except the Splash is rebuilt in the new colours (a fresh instance). The
+        /// visible screen is shown again (OnHide / OnShow, so the game screen restarts its level) and the open popups are
+        /// reopened in the same order.
+        /// </summary>
+        void OnThemeChanged()
+        {
+            Theme.PaintBg(canvasBg);
+            if (appCamera != null) appCamera.backgroundColor = Theme.Bg;
+
+            var reopen = new List<Type>(openPopups);
+            for (int i = openPopups.Count - 1; i >= 0; i--) ClosePopup(openPopups[i]);
+
+            Type shown = current;
+            Entry se;
+            bool visible = shown != null && shown != typeof(ScreenSplash) && entries.TryGetValue(shown, out se) && se.container.activeSelf;
+            if (visible) entries[shown].screen.OnHide();
+
+            foreach (var t in new List<Type>(entries.Keys))
+            {
+                if (t == typeof(ScreenSplash)) continue;
+                var e = entries[t];
+                e.screen.Teardown();
+                Destroy(e.container);
+                entries.Remove(t);
+                BuildEntry(t);
+            }
+
+            if (visible)
+            {
+                var ne = entries[shown];
+                ne.container.SetActive(true);
+                ne.screen.OnShow();
+            }
+            foreach (var t in reopen) Open(t.Name);
+            Debug.Log("[Theme] " + Theme.Current.Id + ": " + entries.Count + " screens rebuilt");
+        }
+
+        void BuildEntry(Type t)
+        {
+            {
                 var s = (AppScreen)Activator.CreateInstance(t);
                 var e = new Entry { screen = s };
 

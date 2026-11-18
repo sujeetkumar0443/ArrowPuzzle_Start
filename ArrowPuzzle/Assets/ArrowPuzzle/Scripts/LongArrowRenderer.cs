@@ -16,6 +16,7 @@ namespace ArrowPuzzle
         public const float FeatherPx = 1f;         // alpha ramp on each edge, screen px
         public const float TileCell = 0.92f;       // tile square size, cells
         public const float PressMul = 1.35f, HaloMul = 4f, HintGlowMul = 4.5f;
+        public const float GlowMul = 3f, GlowAlpha = 0.22f; // theme Glow (night): soft copy under each static arrow
 
         // ---- animation timings (tune here; BoardView's long-arrow routines read them)
         public const float ExitCellsPerSecond = 110f; // exit speed once the ease-in is done
@@ -27,6 +28,7 @@ namespace ArrowPuzzle
         public const float BumpCellsPerSecond = 80f;  // blocked tap: slide up to the blocker
         public const float RecoilSeconds = 0.31f;     // blocked tap: spring back to rest
 
+        /// <summary>OLD: palette colour by index (arrow colours now come from the theme: Themes.ArrowColor).</summary>
         public static Color Arrow(int colorIndex) { return Theme.Palette[((colorIndex % Theme.Palette.Length) + Theme.Palette.Length) % Theme.Palette.Length]; }
         public static Color Tile { get { return Theme.Tile; } }
         public static Color Error { get { return Theme.Error; } }
@@ -523,6 +525,18 @@ namespace ArrowPuzzle
             var g = batches[b];
             g.items.Clear();
             int end = Mathf.Min(arrows.Count, (b + 1) * PerBatch);
+            if (Theme.Glow)
+            {
+                // glows first, so no glow covers another arrow's line (moving arrows get none: frame time)
+                for (int i = b * PerBatch; i < end; i++)
+                {
+                    var a = arrows[i];
+                    if (a.removed || !a.inBatch) continue;
+                    var gc = a.color;
+                    gc.a *= LongStyle.GlowAlpha;
+                    g.items.Add(new StrokeGraphic.Item { pts = a.rest, col = gc, mul = LongStyle.GlowMul, head = true });
+                }
+            }
             for (int i = b * PerBatch; i < end; i++)
             {
                 var a = arrows[i];
