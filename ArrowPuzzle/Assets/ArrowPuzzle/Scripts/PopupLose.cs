@@ -274,7 +274,7 @@ namespace ArrowPuzzle
             used = false; // a new loss: the ad may revive once
             pending = Pending.None;
             var lost = GameApp.I.Get<ScreenGame>();
-            AnalyticsService.LevelFail(GameApp.I.CurrentLevel, GameApp.I.CurrentMode.ToString(),
+            AnalyticsService.LevelFail(GameApp.I.CurrentLevel, Campaign.ShapeOf(GameApp.I.CurrentLevel),
                                        lost != null && lost.Board != null ? lost.Board.Remaining : -1);
             AnalyticsService.ReviveAdOffered(GameApp.I.CurrentLevel); // the Watch ad button is on this screen
             Save.SkipsChanged -= RefreshSkip; // never twice

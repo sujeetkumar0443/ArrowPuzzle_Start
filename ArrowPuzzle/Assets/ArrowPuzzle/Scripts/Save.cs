@@ -7,7 +7,7 @@ namespace ArrowPuzzle
     {
         const string UnlockedKey = "unlockedGlobal";
 
-        /// <summary>Dev switch: all 150 levels are playable. Keep false for release.</summary>
+        /// <summary>Dev switch: all levels are playable. Keep false for release.</summary>
         public const bool UnlockAllLevels = false;
 
         static bool AllLevels { get { return UnlockAllLevels; } } // property, so "UnlockAllLevels || x" gives no unreachable-code warning
@@ -20,6 +20,7 @@ namespace ArrowPuzzle
         {
             get
             {
+                Migrate(); // the first-run fallback below reads the per-level stars
                 if (!PlayerPrefs.HasKey(UnlockedKey))
                 {
                     int g = 1;
@@ -40,7 +41,7 @@ namespace ArrowPuzzle
         /// <summary>Global level g was won (a win always saves 1 to 3 stars).</summary>
         public static bool IsCompleted(int g)
         {
-            return Stars(LevelPath.TypeOf(g), LevelPath.TypeLevelOf(g)) > 0;
+            return Stars(g) > 0;
         }
 
         /// <summary>A win of global level g opens the next one and pays the base win reward (WinCoins, every win).</summary>
@@ -123,9 +124,7 @@ namespace ArrowPuzzle
         public static void SkipLevel(int g)
         {
             g = Mathf.Clamp(g, 1, LevelPath.Count);
-            var type = LevelPath.TypeOf(g);
-            int typeLevel = LevelPath.TypeLevelOf(g);
-            if (Stars(type, typeLevel) <= 0) SetStars(type, typeLevel, 1);
+            if (Stars(g) <= 0) SetStars(g, 1);
             UnlockAfter(g);
         }
 
@@ -188,53 +187,36 @@ namespace ArrowPuzzle
         /// <summary>Raised after every Hints write (the map's hints pill listens while it is shown).</summary>
         public static event System.Action HintsChanged;
 
-        public static int Stars(int level)
+        // ------------------------------------------------------------------ stars and best times per global level
+
+        static string StarsKey(int g) { return "ap_lvl_stars_" + g; }
+        static string BestKey(int g) { return "ap_lvl_best_" + g; }
+
+        /// <summary>Stars (0..3) of global level g; 0 = not completed.</summary>
+        public static int Stars(int g)
         {
-            return PlayerPrefs.GetInt("ap_stars_" + level, 0);
+            Migrate();
+            return PlayerPrefs.GetInt(StarsKey(g), 0);
         }
 
-        public static void SetStars(int level, int stars)
+        /// <summary>Keeps the best result: only a higher star count is saved.</summary>
+        public static void SetStars(int g, int stars)
         {
-            if (stars > Stars(level)) PlayerPrefs.SetInt("ap_stars_" + level, stars);
+            if (stars > Stars(g)) PlayerPrefs.SetInt(StarsKey(g), stars);
             PlayerPrefs.Save();
         }
 
-        // ------------------------------------------------------------------ per type (Classic = the keys above)
-
-        static string Tag(GameMode mode)
+        /// <summary>Best solve time of global level g in seconds, 0 when it has no best yet.</summary>
+        public static float GetBestTime(int g)
         {
-            return mode == GameMode.Shapes ? "shapes" : "mosaic";
+            Migrate();
+            return Mathf.Max(0f, PlayerPrefs.GetFloat(BestKey(g), 0f));
         }
 
-        public static int Stars(GameMode mode, int level)
+        public static void SetBestTime(int g, float seconds)
         {
-            if (mode == GameMode.Classic) return Stars(level);
-            return PlayerPrefs.GetInt("ap_stars_" + Tag(mode) + "_" + level, 0);
-        }
-
-        public static void SetStars(GameMode mode, int level, int stars)
-        {
-            if (mode == GameMode.Classic) { SetStars(level, stars); return; }
-            if (stars > Stars(mode, level)) PlayerPrefs.SetInt("ap_stars_" + Tag(mode) + "_" + level, stars);
+            PlayerPrefs.SetFloat(BestKey(g), Mathf.Max(0f, seconds));
             PlayerPrefs.Save();
-        }
-
-        /// <summary>Best solve time in seconds, 0 when the level has no best yet.</summary>
-        public static float GetBestTime(GameMode mode, int level)
-        {
-            return Mathf.Max(0f, PlayerPrefs.GetFloat(BestKey(mode, level), 0f));
-        }
-
-        public static void SetBestTime(GameMode mode, int level, float seconds)
-        {
-            PlayerPrefs.SetFloat(BestKey(mode, level), Mathf.Max(0f, seconds));
-            PlayerPrefs.Save();
-        }
-
-        // same shape as the stars keys: Classic "ap_best_<n>", others "ap_best_<mode>_<n>"
-        static string BestKey(GameMode mode, int level)
-        {
-            return mode == GameMode.Classic ? "ap_best_" + level : "ap_best_" + Tag(mode) + "_" + level;
         }
 
         /// <summary>Completed levels on the whole path.</summary>
@@ -246,13 +228,60 @@ namespace ArrowPuzzle
             return n;
         }
 
-        /// <summary>Stars over all three modes, levels 1..LevelsPerMode.</summary>
+        /// <summary>Stars over the whole path.</summary>
         public static int TotalStars()
         {
             int sum = 0;
-            for (int m = 0; m < ModeInfo.Count; m++)
-                for (int n = 1; n <= ModeInfo.LevelsPerMode; n++) sum += Stars((GameMode)m, n);
+            for (int g = 1; g <= LevelPath.Count; g++) sum += Stars(g);
             return sum;
+        }
+
+        /// <summary>A campaign shape (0-based Campaign index) is open once UnlockedGlobal reaches its first level.</summary>
+        public static bool IsShapeUnlocked(int shapeIndex) { return Campaign.IsShapeUnlocked(shapeIndex); }
+
+        public static bool IsShapeUnlocked(string shape) { return Campaign.IsShapeUnlocked(shape); }
+
+        // ------------------------------------------------------------------ one-time migration from the per-type keys
+
+        const string ProgressV2Key = "ap_progress_v2"; // 1 = the old per-type stars / best times were copied
+        static bool migrated;
+
+        /// <summary>
+        /// Once per install: stars and best times of the old Classic / Shapes / Mosaic levels are copied to the global
+        /// level they had in the old 150-level cycle (g = 1 + 3 * (typeLevel - 1) + type). unlockedGlobal keeps its
+        /// value and meaning. The old keys are left in place (removed in the cleanup step).
+        /// </summary>
+        static void Migrate()
+        {
+            if (migrated) return;
+            migrated = true;
+            if (PlayerPrefs.GetInt(ProgressV2Key, 0) == 1) return;
+            int stars = 0, best = 0;
+            for (int g = 1; g <= LevelPath.OldCount; g++)
+            {
+                var type = LevelPath.OldTypeOf(g);
+                int n = LevelPath.OldTypeLevelOf(g);
+                int s = PlayerPrefs.GetInt(OldStarsKey(type, n), 0);
+                if (s > 0 && PlayerPrefs.GetInt(StarsKey(g), 0) < s) { PlayerPrefs.SetInt(StarsKey(g), Mathf.Clamp(s, 1, 3)); stars++; }
+                float b = PlayerPrefs.GetFloat(OldBestKey(type, n), 0f);
+                if (b > 0f && !PlayerPrefs.HasKey(BestKey(g))) { PlayerPrefs.SetFloat(BestKey(g), b); best++; }
+            }
+            PlayerPrefs.SetInt(ProgressV2Key, 1);
+            PlayerPrefs.Save();
+            Debug.Log("[Save] progress migrated to per-level keys: " + stars + " levels with stars, " + best + " best times");
+        }
+
+        // the old per-type keys: Classic "ap_stars_<n>" / "ap_best_<n>", others "ap_stars_<mode>_<n>" / "ap_best_<mode>_<n>"
+        static string OldTag(GameMode mode) { return mode == GameMode.Shapes ? "shapes" : "mosaic"; }
+
+        static string OldStarsKey(GameMode mode, int n)
+        {
+            return mode == GameMode.Classic ? "ap_stars_" + n : "ap_stars_" + OldTag(mode) + "_" + n;
+        }
+
+        static string OldBestKey(GameMode mode, int n)
+        {
+            return mode == GameMode.Classic ? "ap_best_" + n : "ap_best_" + OldTag(mode) + "_" + n;
         }
     }
 }

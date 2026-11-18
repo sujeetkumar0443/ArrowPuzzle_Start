@@ -70,7 +70,7 @@ namespace ArrowPuzzle
         readonly Coroutine[] heartFx = new Coroutine[BoardView.MaxLives];
         RectTransform area, card, hintRt, restartRt;
         BoardZoom zoom;
-        int level, typeLevel; // global level (LevelPath) and its number within its type (data, stars, best time)
+        int level; // global level (LevelPath / Campaign)
         float btnBottom = BtnBottom, toastY = ToastY; // move up above the banner (ApplyBannerLayout)
         bool bannerLayoutPending; // the banner height changed while a popup had it hidden (RestoreBanner)
 
@@ -594,13 +594,13 @@ namespace ArrowPuzzle
 
         /// <summary>
         /// Loads global level n (also for popups: Next / Retry while this screen is already showing). n is kept within
-        /// 1..LevelPath.Count; its type and type level come from LevelPath.
+        /// 1..LevelPath.Count; the level is campaign level n (Levels.For, long arrows).
         /// </summary>
         public void StartLevel(int n)
         {
             Time.timeScale = 1f; // safety: a level never starts frozen
             int g = Mathf.Clamp(n, 1, LevelPath.Count);
-            var type = LevelPath.TypeOf(g);
+            var type = GameMode.Shapes; // kept for GameApp.CurrentMode / ClearedMode (one level type now)
             LevelData data;
             bool sample = LongSamplesDev.Active > 0;
             if (sample)
@@ -611,26 +611,23 @@ namespace ArrowPuzzle
                 LongSamplesDev.Started();
                 // a real, unlocked level whose next one is unlocked too, so PopupWin's NEXT comes back here
                 g = Mathf.Max(1, Save.UnlockedGlobal - 1);
-                type = GameMode.Shapes;
                 data = LongSamplesDev.Load();
             }
-            else data = Levels.For(type, LevelPath.TypeLevelOf(g));
+            else data = Levels.For(g);
             if (data == null)
             {
-                Debug.LogError("[ArrowPuzzle] No level " + g + " (" + type + " " + LevelPath.TypeLevelOf(g) + ")");
+                Debug.LogError("[ArrowPuzzle] No level " + g + " (" + Campaign.ShapeOf(g) + ")");
                 return;
             }
             mode = type;
             level = g;
-            typeLevel = data.number;
             GameApp.I.CurrentMode = mode;
             GameApp.I.CurrentLevel = level;
             levelText.text = sample ? "Long " + LongSamplesDev.Active : "Level " + level;
             RefreshHints();
 
-            var info = ModeInfo.Get(mode);
-            modePill.color = info.Color;
-            modeText.text = sample ? data.shape : info.Name; // the mode name only (compact chip row: room for the Skip pill)
+            modePill.color = Theme.Teal;
+            modeText.text = sample ? data.shape : LevelPath.TypeName(level); // the shape name (compact chip row: room for the Skip pill)
             skipWaiting = false;
             RefreshSkip();
             skipAttentionT0 = Time.unscaledTime + SkipAttentionDelay; // one stronger bounce 1 s into every level
@@ -646,9 +643,9 @@ namespace ArrowPuzzle
             Ads.Banner(true, "ScreenGame"); // every level start (first, Restart, Next): this screen wants it
             bannerLayoutPending = false;
             ApplyBannerLayout(); // buttons and board area above the banner's current height
-            if (!sample) AnalyticsService.LevelStart(level, mode.ToString(), LevelPath.Difficulty(level));
+            if (!sample) AnalyticsService.LevelStart(level, Campaign.ShapeOf(level), LevelPath.Difficulty(level));
             CrashReporter.SetKey("level", level.ToString());
-            CrashReporter.SetKey("type", mode.ToString());
+            CrashReporter.SetKey("type", sample ? "sample" : Campaign.ShapeOf(level));
             MrecSlot.Preload(MrecKind.Bonus); // the MRECs of the popups that can open from here (no-op when loading /
             MrecSlot.Preload(MrecKind.Lose);  // loaded at the same place); Level complete's loads while the wheel spins
 
@@ -688,9 +685,9 @@ namespace ArrowPuzzle
                 if (!GameApp.I.Open("PopupBonusSpin")) GameApp.I.Open("PopupWin");
                 return;
             }
-            float prevBest = Save.GetBestTime(mode, typeLevel);
+            float prevBest = Save.GetBestTime(level);
             bool newBest = prevBest <= 0f || solveTime < prevBest;
-            if (newBest) Save.SetBestTime(mode, typeLevel, solveTime);
+            if (newBest) Save.SetBestTime(level, solveTime);
             GameApp.I.ResultTime = solveTime;
             GameApp.I.ResultPrevBest = prevBest;
             GameApp.I.ResultNewBest = newBest;
@@ -702,9 +699,9 @@ namespace ArrowPuzzle
 
             GameApp.I.ResultLives = Board.Lives;
             int stars = Mathf.Clamp(Board.Lives, 1, 3);
-            int prevStars = Save.Stars(mode, typeLevel);                                // for the map (read only)
+            int prevStars = Save.Stars(level);                                          // for the map (read only)
             bool unlocks = level == Save.UnlockedGlobal && level < LevelPath.Count;     // what LevelWon will do
-            Save.SetStars(mode, typeLevel, stars);
+            Save.SetStars(level, stars);
             Save.LevelWon(level);
             // hand-off to the map's unlock animation (played only after PopupWin's NEXT)
             GameApp.I.UnlockPending = true;

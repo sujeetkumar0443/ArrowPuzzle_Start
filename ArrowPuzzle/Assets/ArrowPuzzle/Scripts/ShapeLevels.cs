@@ -42,6 +42,25 @@ namespace ArrowPuzzle
             return FileTable(file).TryGetValue(n, out e) ? Copy(e.data) : null;
         }
 
+        /// <summary>
+        /// Level n out of a level file's text, parsing only that level's lines (from its "L n " line to the next "L").
+        /// Null if the file has no level n.
+        /// </summary>
+        public static LevelData ParseLevel(string text, int n)
+        {
+            if (string.IsNullOrEmpty(text)) return null;
+            string head = "L " + n + " ";
+            int start = text.StartsWith(head) ? 0 : text.IndexOf("\n" + head, System.StringComparison.Ordinal);
+            if (start < 0) return null;
+            if (start > 0) start++;
+            int end = text.IndexOf("\nL ", start, System.StringComparison.Ordinal);
+            string part = end < 0 ? text.Substring(start) : text.Substring(start, end - start + 1);
+            var d = new Dictionary<int, Entry>();
+            Parse(part, d);
+            Entry e;
+            return d.TryGetValue(n, out e) ? e.data : null;
+        }
+
         /// <summary>Number of levels in a level file in Resources/Levels.</summary>
         public static int CountInFile(string file)
         {

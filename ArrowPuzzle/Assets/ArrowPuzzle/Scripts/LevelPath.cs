@@ -1,55 +1,42 @@
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// The one path of 150 levels. Global level g (1..Count) cycles through the types: 1 = Classic 1, 2 = Shapes 1,
-    /// 3 = Mosaic 1, 4 = Classic 2, ... Level data, stars and best times stay per type (Levels.For, Save keys).
+    /// The one path of levels: the long-arrow campaign (Campaign: 37 shapes x 12 levels = 444). Global level g is the
+    /// campaign level g; its shape, arrow count and difficulty come from Campaign / index.txt (no level is parsed).
+    /// The old Classic / Shapes / Mosaic cycle (150 levels) is kept only for the one-time save migration and the music
+    /// rotation (Old*, Music*).
     /// </summary>
     public static class LevelPath
     {
-        const int Types = 3;
-        public const int Count = ModeInfo.LevelsPerMode * Types;
-        public const int EasyMaxArrows = 50;
+        public const int Count = Campaign.TotalLevels;
 
-        static readonly string[] Names = { "Arrow maze", "Picture", "Mosaic" };
-        static readonly bool[] hard = new bool[Count];
-        static readonly bool[] known = new bool[Count];
+        /// <summary>"Hard" above this many arrows (analytics label).</summary>
+        public const int EasyMaxArrows = 35;
 
-        public static GameMode TypeOf(int g)
-        {
-            return (GameMode)((Clamp(g) - 1) % Types);
-        }
-
-        public static int TypeLevelOf(int g)
-        {
-            return (Clamp(g) - 1) / Types + 1;
-        }
-
-        public static int Global(GameMode type, int typeLevel)
-        {
-            return (typeLevel - 1) * Types + (int)type + 1;
-        }
-
+        /// <summary>Display name of the level's shape, e.g. "Heart".</summary>
         public static string TypeName(int g)
         {
-            return Names[(int)TypeOf(g)];
+            return Campaign.ShapeTitle(g);
         }
 
-        /// <summary>"Easy" (at most EasyMaxArrows arrows) or "Hard", from the real level data. Loaded once per level.</summary>
+        /// <summary>"Easy" (at most EasyMaxArrows arrows) or "Hard", from index.txt.</summary>
         public static string Difficulty(int g)
         {
-            int i = Clamp(g) - 1;
-            if (!known[i])
-            {
-                var data = Levels.For(TypeOf(g), TypeLevelOf(g));
-                hard[i] = data != null && data.pieces.Count > EasyMaxArrows;
-                known[i] = true;
-            }
-            return hard[i] ? "Hard" : "Easy";
+            return Campaign.ArrowCount(g) > EasyMaxArrows ? "Hard" : "Easy";
         }
 
-        static int Clamp(int g)
-        {
-            return g < 1 ? 1 : g > Count ? Count : g;
-        }
+        // ------------------------------------------------------------------ the old 150-level cycle
+
+        /// <summary>Levels of the old cycle: 1 = Classic 1, 2 = Shapes 1, 3 = Mosaic 1, 4 = Classic 2, ...</summary>
+        public const int OldCount = ModeInfo.LevelsPerMode * 3;
+
+        public static GameMode OldTypeOf(int g) { return (GameMode)((g - 1) % 3); }
+
+        public static int OldTypeLevelOf(int g) { return (g - 1) / 3 + 1; }
+
+        /// <summary>Music rotation (same tracks and cuts as before for levels 1..150, then it wraps).</summary>
+        public static GameMode MusicTypeOf(int g) { return OldTypeOf(g < 1 ? 1 : g); }
+
+        public static int MusicLevelOf(int g) { return ((g < 1 ? 0 : g - 1) / 3) % ModeInfo.LevelsPerMode + 1; }
     }
 }

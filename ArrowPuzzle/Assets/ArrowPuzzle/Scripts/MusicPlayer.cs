@@ -62,7 +62,7 @@ namespace ArrowPuzzle
         public static void PlayLevel(int g)
         {
             if (inst == null) return;
-            inst.Request(LevelPath.TypeOf(g), LevelPath.TypeLevelOf(g));
+            inst.Request(LevelPath.MusicTypeOf(g), LevelPath.MusicLevelOf(g)); // music rotation of the old cycle (levels 1..150 unchanged)
         }
 
         /// <summary>Home: the music of the highest unlocked level.</summary>
