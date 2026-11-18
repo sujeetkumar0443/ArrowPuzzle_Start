@@ -7,12 +7,14 @@ namespace ArrowPuzzle
     /// <summary>Colours and sizes of the long-arrow renderer, all in one place (the theme system replaces this later).</summary>
     public static class LongStyle
     {
-        public const float LineD = 2.6f;           // line width, design px, constant on screen at any zoom
-        public const float HeadPerLine = 3.2f;     // arrowhead length / line width
-        public const float HeadMaxCell = 0.9f;     // arrowhead length cap, cells
-        public const float HeadHalfPerLen = 0.55f; // arrowhead half width / length
+        // ---- stroke shape, in cells (scales with the board and the zoom)
+        public const float LineCells = 0.19f;      // line width
+        public const float HeadCells = 0.62f;      // arrowhead length
+        public const float HeadWideCells = 0.6f;   // arrowhead width (base of the triangle)
+        public const float HeadRoundCells = 0.05f; // arrowhead corner rounding radius
         public const float ApexMaxCell = 0.4f;     // apex at most this far past the head cell centre
-        public const float CornerCell = 0.42f;     // corner radius, cells
+        public const float CornerCell = 0.5f;      // path corner radius
+        public const float LineMinPx = 2f;         // dense boards: the line is never thinner than this on screen
         public const float FeatherPx = 1f;         // alpha ramp on each edge, screen px
         public const float TileCell = 0.92f;       // tile square size, cells
         public const float PressMul = 1.35f, HaloMul = 4f, HintGlowMul = 4.5f;
@@ -69,8 +71,29 @@ namespace ArrowPuzzle
     /// <summary>Sizes of one stroke in board-local units (BoardView's cell units), recomputed when the zoom changes.</summary>
     public struct StrokeStyle
     {
-        public float hw, feather, corner, headLen, headHalf, apexOff;
+        public float hw, feather, corner, headLen, headHalf, apexOff, headRound;
         public bool head;
+
+        /// <summary>
+        /// Sizes for a cell size and a line width (both board-local), feather = 1 screen px, mul = width multiplier
+        /// (press / halo / glow: the head grows with the line). Shared by the game board and LevelPreview.
+        /// </summary>
+        public static StrokeStyle Make(float cell, float line, float feather, float mul, bool head)
+        {
+            float w = line * mul, grow = (mul - 1f) * line;
+            float headLen = LongStyle.HeadCells * cell + grow;
+            return new StrokeStyle
+            {
+                hw = Mathf.Max(0.05f, w * 0.5f - feather * 0.5f),
+                feather = feather,
+                corner = cell * LongStyle.CornerCell,
+                headLen = headLen,
+                headHalf = LongStyle.HeadWideCells * 0.5f * cell + grow * 0.5f,
+                apexOff = Mathf.Min(LongStyle.ApexMaxCell * cell, 0.5f * headLen),
+                headRound = LongStyle.HeadRoundCells * cell,
+                head = head,
+            };
+        }
     }
 
     /// <summary>
@@ -115,7 +138,7 @@ namespace ArrowPuzzle
                     Cap(vh, dense[0], (dense[0] - dense[1]).normalized, s.hw, s.feather, col);
                 }
             }
-            if (s.head) Head(vh, apex, dir, s.headLen, s.headHalf, s.feather, col);
+            if (s.head) Head(vh, apex, dir, s.headLen, s.headHalf, s.headRound, s.feather, col);
         }
 
         /// <summary>The rounded centre line (no head trim), for hit tests.</summary>
@@ -251,13 +274,20 @@ namespace ArrowPuzzle
             }
         }
 
-        static void Head(VertexHelper vh, Vector2 apex, Vector2 dir, float len, float half, float f, Color32 col)
+        const int HeadArcSteps = 3;
+
+        /// <summary>
+        /// Filled triangle head (apex, base len behind it, half width half). round &gt; 0: corners rounded with that radius
+        /// (the triangle shrunk around its incentre by round, then grown back by round with arcs), feathered rim.
+        /// </summary>
+        static void Head(VertexHelper vh, Vector2 apex, Vector2 dir, float len, float half, float round, float f, Color32 col)
         {
             Color32 clear = col;
             clear.a = 0;
             Vector2 perp = new Vector2(-dir.y, dir.x);
             Vector2 bc = apex - dir * len;
             Vector2 v0 = apex, v1 = bc + perp * half, v2 = bc - perp * half;
+            if (round > 0f && RoundedHead(vh, v0, v1, v2, round, f, col, clear)) return;
             Vector2 mid = (v0 + v1 + v2) / 3f;
             int b = vh.currentVertCount;
             vh.AddVert(v0, col, Vector4.zero);
@@ -267,6 +297,57 @@ namespace ArrowPuzzle
             Edge(vh, v0, v1, mid, f, col, clear);
             Edge(vh, v1, v2, mid, f, col, clear);
             Edge(vh, v2, v0, mid, f, col, clear);
+        }
+
+        static readonly List<Vector2> outline = new List<Vector2>();
+        static readonly List<Vector2> outNormal = new List<Vector2>();
+
+        static bool RoundedHead(VertexHelper vh, Vector2 a, Vector2 b, Vector2 c, float r, float f, Color32 col, Color32 clear)
+        {
+            float la = (b - c).magnitude, lb = (c - a).magnitude, lc = (a - b).magnitude, per = la + lb + lc;
+            if (per < 1e-5f) return false;
+            Vector2 inc = (a * la + b * lb + c * lc) / per;                      // incentre
+            float area = Mathf.Abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) * 0.5f;
+            float rho = 2f * area / per;                                          // inradius
+            r = Mathf.Min(r, rho * 0.6f);
+            if (r <= 1e-5f) return false;
+            float k = (rho - r) / rho;
+            var p = new[] { inc + (a - inc) * k, inc + (b - inc) * k, inc + (c - inc) * k };
+            // counter-clockwise order, so the outward normal of edge p[i] -> p[i+1] is (dy, -dx)
+            float cross = (p[1].x - p[0].x) * (p[2].y - p[0].y) - (p[2].x - p[0].x) * (p[1].y - p[0].y);
+            if (cross < 0f) { var t = p[1]; p[1] = p[2]; p[2] = t; }
+            outline.Clear();
+            outNormal.Clear();
+            for (int i = 0; i < 3; i++)
+            {
+                Vector2 prev = p[(i + 2) % 3], cur = p[i], next = p[(i + 1) % 3];
+                Vector2 e0 = (cur - prev).normalized, e1 = (next - cur).normalized;
+                Vector2 n0 = new Vector2(e0.y, -e0.x), n1 = new Vector2(e1.y, -e1.x);
+                float a0 = Mathf.Atan2(n0.y, n0.x), a1 = Mathf.Atan2(n1.y, n1.x);
+                while (a1 < a0) a1 += Mathf.PI * 2f;
+                for (int j = 0; j <= HeadArcSteps; j++)
+                {
+                    float ang = Mathf.Lerp(a0, a1, j / (float)HeadArcSteps);
+                    var n = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang));
+                    outline.Add(cur + n * r);
+                    outNormal.Add(n);
+                }
+            }
+            int centre = vh.currentVertCount, m = outline.Count;
+            vh.AddVert(inc, col, Vector4.zero);
+            for (int i = 0; i < m; i++)
+            {
+                vh.AddVert(outline[i], col, Vector4.zero);
+                vh.AddVert(outline[i] + outNormal[i] * f, clear, Vector4.zero);
+            }
+            for (int i = 0; i < m; i++)
+            {
+                int i0 = centre + 1 + 2 * i, i1 = centre + 1 + 2 * ((i + 1) % m);
+                vh.AddTriangle(centre, i0, i1);
+                vh.AddTriangle(i0, i0 + 1, i1 + 1);
+                vh.AddTriangle(i0, i1 + 1, i1);
+            }
+            return true;
         }
 
         static void Edge(VertexHelper vh, Vector2 a, Vector2 b, Vector2 inside, float f, Color32 col, Color32 clear)
@@ -603,6 +684,7 @@ namespace ArrowPuzzle
     {
         public const int PerBatch = 20;
         const float RebuildEvery = 0.1f; // s between zoom rebuilds while the scale keeps changing
+        const float RebuildScale = 0.25f; // rebuild when the zoom moved this much (feather stays 0.8..1.25 px)
 
         class Arrow
         {
@@ -757,17 +839,19 @@ namespace ArrowPuzzle
             ResetLayer(); // impact rings on the Fx canvas belong to BoardView (its extras), which destroys them
         }
 
-        // ------------------------------------------------------------------ sizes (screen-fixed width)
+        // ------------------------------------------------------------------ sizes
 
         /// <summary>
         /// Every frame from BoardView. rootPerLocal = root canvas units per board-local unit; screenPerLocal = screen
-        /// px per board-local unit. Rebuilds the meshes when the scale changed (at most every RebuildEvery s, and once
-        /// more when it stops changing).
+        /// px per board-local unit. The stroke shape is in cells, so it scales with the board transform by itself; only
+        /// the screen-px parts (1 px feather, 2 px minimum line, 1 px grid lines, dot minimum) need a rebuild, so the
+        /// meshes are rebuilt only when the scale moved by more than RebuildScale since the last build (at most every
+        /// RebuildEvery s, and once more when it stops changing).
         /// </summary>
         public void Tick(float rootPerLocal, float screenPerLocal)
         {
             if (root == null || arrows.Count == 0 || rootPerLocal <= 0f) return;
-            bool changed = builtScale < 0f || Mathf.Abs(rootPerLocal - builtScale) > builtScale * 0.01f;
+            bool changed = builtScale < 0f || Mathf.Abs(rootPerLocal - builtScale) > builtScale * RebuildScale;
             if (!changed && !pending) return;
             float now = Time.unscaledTime;
             if (changed && builtScale > 0f && now - lastBuild < RebuildEvery) { pending = true; return; }
@@ -776,7 +860,8 @@ namespace ArrowPuzzle
             pending = false;
             lastBuild = now;
             builtScale = rootPerLocal;
-            line = Theme.D(LongStyle.LineD) / rootPerLocal;
+            // the shape scales with the cell (and so with the zoom); only the 1 px feather and the 2 px minimum are screen px
+            line = Mathf.Max(LongStyle.LineCells * cell, LongStyle.LineMinPx / Mathf.Max(1e-4f, screenPerLocal));
             feather = LongStyle.FeatherPx / Mathf.Max(1e-4f, screenPerLocal);
             grid.width = LongStyle.GridPx / Mathf.Max(1e-4f, screenPerLocal);
             if (grid.gameObject.activeSelf) grid.Dirty(); // hidden: built with this width when it shows (OnEnable)
@@ -866,18 +951,7 @@ namespace ArrowPuzzle
         /// <summary>Stroke sizes for a width multiplier, in board-local units.</summary>
         public StrokeStyle Style(float mul, bool head)
         {
-            float w = line * mul;
-            float headLen = Mathf.Min(LongStyle.HeadPerLine * line, LongStyle.HeadMaxCell * cell) + (mul - 1f) * line;
-            return new StrokeStyle
-            {
-                hw = Mathf.Max(0.05f, w * 0.5f - feather * 0.5f),
-                feather = feather,
-                corner = cell * LongStyle.CornerCell,
-                headLen = headLen,
-                headHalf = headLen * LongStyle.HeadHalfPerLen,
-                apexOff = Mathf.Min(LongStyle.ApexMaxCell * cell, 0.5f * headLen),
-                head = head,
-            };
+            return StrokeStyle.Make(cell, line, feather, mul, head);
         }
 
         // ------------------------------------------------------------------ static batches

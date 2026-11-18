@@ -38,7 +38,7 @@ namespace ArrowPuzzle
 
             var sg = Layer(board, "Arrows").gameObject.AddComponent<StrokeGraphic>();
             sg.raycastTarget = false;
-            float line = Mathf.Clamp(cell * 0.24f, Theme.D(0.9f), Theme.D(2.2f));
+            float line = Mathf.Max(cell * LongStyle.LineCells, Theme.D(0.9f)); // same shape as the game board
             float feather = 1f / Mathf.Max(0.1f, Screen.width / 1080f); // 1 screen px in canvas units (canvas = 1080 wide)
             sg.fixedStyle = (mul, head) => Style(cell, line, feather, mul, head);
 
@@ -75,18 +75,7 @@ namespace ArrowPuzzle
 
         static StrokeStyle Style(float cell, float line, float feather, float mul, bool head)
         {
-            float w = line * mul;
-            float headLen = Mathf.Min(LongStyle.HeadPerLine * line, LongStyle.HeadMaxCell * cell) + (mul - 1f) * line;
-            return new StrokeStyle
-            {
-                hw = Mathf.Max(0.05f, w * 0.5f - feather * 0.5f),
-                feather = feather,
-                corner = cell * LongStyle.CornerCell,
-                headLen = headLen,
-                headHalf = headLen * LongStyle.HeadHalfPerLen,
-                apexOff = Mathf.Min(LongStyle.ApexMaxCell * cell, 0.5f * headLen),
-                head = head,
-            };
+            return StrokeStyle.Make(cell, line, feather, mul, head);
         }
 
         static RectTransform Layer(Transform parent, string name)
