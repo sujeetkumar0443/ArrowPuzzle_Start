@@ -57,8 +57,8 @@ namespace ArrowPuzzle
     }
 
     /// <summary>
-    /// TEMPORARY dev route to the long-arrow sample levels (Resources/Levels/long_samples.txt): long-press the ARROW
-    /// wordmark on Home (editor / development builds) -> PopupLongSamples -> ScreenGame. While a sample is active,
+    /// TEMPORARY dev route to the long-arrow sample levels (Resources/Levels/long_samples.txt): long-press (or tap 7 times) the
+    /// coin pill on Home (editor / development builds) -> PopupLongSamples -> ScreenGame. While a sample is active,
     /// ScreenGame saves no progress (no stars, best time, unlock, skip). Leaving ScreenGame ends it.
     /// </summary>
     public static class LongSamplesDev

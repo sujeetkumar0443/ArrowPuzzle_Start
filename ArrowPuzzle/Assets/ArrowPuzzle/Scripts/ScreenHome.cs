@@ -5,12 +5,11 @@ using UnityEngine.UI;
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// Home: cream background with dots and faint drifting arrows (like the splash). Top bar: settings (left), coin pill
-    /// (right). The splash's wordmark in its end state at the top third. A five-slot level ruler: the selected level big
-    /// and coral with a pulsing ring, two levels left, two right (locked ones beige with a lock), prev / next buttons at
-    /// the edges. PLAY ("LEVEL N" over "PLAY", breathing) and the "SKIPS TODAY" row sit above the banner. No layout
-    /// groups: every position is fixed in design px (y from the top of the safe area) and button rects are snapped to
-    /// whole pixels. Unscaled time.
+    /// Home ("Home with shape preview"): Settings and the coin pill on top; a hero card with the current level's shape
+    /// drawn in the current theme (LevelPreview of thumbs.txt) and two chips (shape progress -> Shapes, theme -> Themes);
+    /// the five-slot level ruler; PLAY (breathing); three Panel tiles: SKIPS n/total (+2 by rewarded ad when none are
+    /// left), THEMES, SHAPES. The hero card takes the height that is left, so everything fits above the banner.
+    /// Dev route (Editor / Development Build): hold the coin pill 1 s, or tap it 7 times in 3 s.
     /// </summary>
     public class ScreenHome : AppScreen
     {
@@ -19,8 +18,9 @@ namespace ArrowPuzzle
         const float SettingsD = 52f, SettingsR = 15f, GearD = 26f;
         const float PillH = 40f, CoinD = 24f, PillPadL = 8f, PillGap = 8f, PillPadR = 16f, CoinFont = 20f;
 
-        // ---- wordmark: shaft line at the top third, clamped
-        const float MarkFrac = 0.26f, MarkMinY = 150f, MarkMaxY = 220f, MarkInkBelow = 56f;
+        // ---- hero card (design 92 from the top, 22 from the sides, 346 wide, radius 30); its height flexes
+        const float CardTop = 92f, CardX = 22f, CardW = 346f, CardR = 30f, CardEdge = 5f, CardMinH = 200f;
+        const float ChipH = 36f, ChipPad = 14f, ChipInset = 14f, ChipFont = 15f, PreviewPad = 18f;
 
         // ---- ruler (x from the centre)
         const float BigD = 78f, SmallD = 40f, NearX = 68f, FarX = 115f, TrackH = 6f;
@@ -34,14 +34,13 @@ namespace ArrowPuzzle
         const float LevelFont = 17f, LevelY = 25f, PlayFont = 46f, PlayY = -12f; // label centres, y up from the face centre
         const float BreathPeriod = 1.8f, BreathAmp = 0.03f;
 
-        // ---- SKIPS TODAY row
-        const float SkipsH = 40f, SkipsPad = 18f, SkipsTextGap = 12f, SkipDotD = 12f, SkipDotGap = 8f, SkipsFont = 14f;
-        const int MaxSkipDots = 8;
+        // ---- bottom tiles: three 106 x 68, Panel with a PanelEdge bottom
+        const float TileW = 106f, TileH = 68f, TileR = 18f, TileEdge = 4f;
+        const int SkipBonus = 2;
 
-        // ---- vertical spacing
-        const float BottomPad = 16f, BannerGap = 8f, PlayToSkips = 24f;
+        // ---- vertical spacing (design px)
+        const float BottomPad = 16f, BannerGap = 8f, TilesToPlay = 20f, PlayToRuler = 16f, RulerToCard = 18f;
 
-        static Color SkipUsed { get { return Theme.InkSoft; } } // read live (theme)
         static readonly Color CoinEdge = Theme.Hex("#D98E00");
         static readonly Vector3[] corners = new Vector3[4];
         static readonly float[] SlotX = { -FarX, -NearX, 0f, NearX, FarX };
@@ -55,13 +54,17 @@ namespace ArrowPuzzle
             public int level;
         }
 
-        RectTransform backdrop, settings, coinPill, ruler, rulerTrack, ring, prev, next, playRoot, skipsRow;
-        Wordmark mark;
-        Text coins, levelLabel, skipsText;
-        Image ringImg;
+        RectTransform backdrop, settings, coinPill, ruler, rulerTrack, ring, prev, next, playRoot;
+        RectTransform card, previewHolder, tilesRow;
+        Text coins, levelLabel, shapeChipText, themeChipText, skipsValue;
+        Image ringImg, shapeChip, themeChip;
         CanvasGroup prevGroup, nextGroup;
         readonly Slot[] slots = new Slot[5];
-        readonly Image[] skipDots = new Image[MaxSkipDots];
+        GameObject preview;
+        string previewKey;
+        ScreenKit.Toast toast;
+        bool skipWaiting;
+        int skipRequest;
 
         int selected = 1, unlocked = 1;
         float popT = -1f;
@@ -73,26 +76,20 @@ namespace ArrowPuzzle
             BuildBackdrop();
             BannerPlaceholder.Create(Root); // just above the background, under everything else
             BuildTopBar();
-            mark = Wordmark.Build(Root); // end state, identical to the splash's last frame
-            // TEMPORARY dev route to the long-arrow samples (LongSamplesDev.OpenList: Editor / Development Build only,
-            // logs "blocked" otherwise): hold the wordmark 1 s. An invisible raycast Image over the whole ARROW PUZZLE
-            // art (a bit larger), last child of the wordmark so it is above the letters; the top-bar buttons are
-            // moved above it at the end of Build.
-            var hold = Ui.Img(mark.Root, "DevHold", null, Color.clear);
-            hold.raycastTarget = true;
-            Ui.PlaceD(hold.rectTransform, Ui.C, Vector2.zero, new Vector2(Wordmark.WidthD + 10f, Wordmark.HeightD + 20f));
-            hold.gameObject.AddComponent<LongPressTrigger>().onHold = () => LongSamplesDev.OpenList("long press");
+            BuildCard();
             BuildRuler();
             BuildPlay();
-            BuildSkips();
+            BuildTiles();
 
-            // second dev route: 7 taps on the coin pill within 3 s (the pill takes taps only for this)
+            // TEMPORARY dev routes to the long-arrow samples (LongSamplesDev.OpenList: Editor / Development Build only,
+            // logs "blocked" otherwise), both on the coin pill now that the logo is gone: hold it 1 s, or tap it 7 times
+            // within 3 s (the pill takes taps only for these)
             var pillImg = coinPill.GetComponent<Image>();
             pillImg.raycastTarget = true;
+            coinPill.gameObject.AddComponent<LongPressTrigger>().onHold = () => LongSamplesDev.OpenList("coin long press");
             coinPill.gameObject.AddComponent<MultiTapTrigger>().onTaps = () => LongSamplesDev.OpenList("coin taps");
-            settings.SetAsLastSibling(); // buttons stay above the dev hold area wherever the layout puts them
-            coinPill.SetAsLastSibling();
 
+            toast = new ScreenKit.Toast(Root);
             Root.gameObject.AddComponent<HomeTicker>().tick = Tick;
             BannerDebug.Create(Root, "ScreenHome"); // only when Ads.ShowBannerDebug
             Refresh();
@@ -100,15 +97,14 @@ namespace ArrowPuzzle
 
         // ------------------------------------------------------------------ build
 
-        /// <summary>Cream, dots and drifting arrows over the whole canvas (Layout matches it to the canvas), so the dot
-        /// grid lines up with the splash's.</summary>
+        /// <summary>Theme background (solid or gradient) and the dot pattern when the theme has dots, over the whole canvas.</summary>
         void BuildBackdrop()
         {
             backdrop = Ui.New(Root, "Backdrop");
             var bg = Ui.Img(backdrop, "Bg", null, Theme.Bg);
             bg.raycastTarget = false;
             Ui.Fill(bg.rectTransform);
-            Theme.PaintBg(bg); // solid or the theme's gradient
+            Theme.PaintBg(bg);
 
             var dots = Ui.Img(backdrop, "Dots", Theme.DotTile, Theme.Dot);
             dots.gameObject.SetActive(Theme.HasDots);
@@ -116,20 +112,16 @@ namespace ArrowPuzzle
             dots.pixelsPerUnitMultiplier = 64f / (34f * Theme.K);
             dots.raycastTarget = false;
             Ui.Fill(dots.rectTransform);
-
-            DriftingArrows.Add(backdrop, 11);
         }
 
         void BuildTopBar()
         {
-            // settings: ink rounded square, white gear
             var sImg = Rounded(Root, "Settings", Theme.Panel, SettingsR);
             settings = sImg.rectTransform;
             MakeButton(sImg, () => GameApp.I.Show("ScreenSettings"));
             var gear = Icons.Make(settings, Icon.Gear, Theme.PanelText, GearD);
             Ui.PlaceD(gear, Ui.C, Vector2.zero, new Vector2(GearD, GearD));
 
-            // coin pill: ink, gold coin, count (width follows the count, see SetCoins)
             var pill = Rounded(Root, "Coins", Theme.Panel, PillH * 0.5f);
             pill.raycastTarget = false;
             coinPill = pill.rectTransform;
@@ -137,6 +129,34 @@ namespace ArrowPuzzle
             Ui.PlaceD(coin, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(PillPadL, 0f), new Vector2(CoinD, CoinD));
             coins = Ui.Label(coinPill, "0", CoinFont, Theme.PanelText, Weight.Bold, TextAnchor.MiddleLeft);
             Ui.PlaceD(coins.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(PillPadL + CoinD + PillGap, 0f), new Vector2(120f, PillH));
+        }
+
+        /// <summary>Hero card: Card colour with a bottom edge; the preview (Layout sizes it) and the two chips.</summary>
+        void BuildCard()
+        {
+            var img = Rounded(Root, "Hero", Theme.Card, CardR);
+            card = img.rectTransform;
+            var edge = img.gameObject.AddComponent<Shadow>();
+            edge.effectColor = Theme.CardShadow;
+            edge.effectDistance = new Vector2(0f, -Theme.D(CardEdge));
+            edge.useGraphicAlpha = false;
+            MakeButton(img, ScreenShapes.Open, false); // tapping the preview opens the Shapes gallery
+
+            previewHolder = Ui.New(card, "PreviewHolder");
+
+            // left: dark chip "PAW  7/12" (-> Shapes)
+            shapeChip = Rounded(card, "ShapeChip", Theme.Panel, ChipH * 0.5f);
+            shapeChipText = Ui.Label(shapeChip.rectTransform, "", ChipFont, Theme.PanelText, Weight.Bold);
+            Ui.Fill(shapeChipText.rectTransform);
+            MakeButton(shapeChip, ScreenShapes.Open);
+
+            // right: soft chip "CREAM THEME" (-> Themes)
+            var soft = Color.Lerp(Theme.Card, Theme.Ink, Theme.Current != null && Theme.Current.Dark ? 0.16f : 0.07f);
+            soft.a = 1f;
+            themeChip = Rounded(card, "ThemeChip", soft, ChipH * 0.5f);
+            themeChipText = Ui.Label(themeChip.rectTransform, "", ChipFont, Theme.Ink, Weight.Bold);
+            Ui.Fill(themeChipText.rectTransform);
+            MakeButton(themeChip, ScreenThemes.Open);
         }
 
         void BuildRuler()
@@ -236,21 +256,45 @@ namespace ArrowPuzzle
             });
         }
 
-        void BuildSkips()
+        /// <summary>SKIPS n/total, THEMES, SHAPES: three Panel tiles with a PanelEdge bottom, centred, 14 apart.</summary>
+        void BuildTiles()
         {
-            var row = Rounded(Root, "SkipsToday", Theme.Panel, SkipsH * 0.5f);
-            row.raycastTarget = false;
-            skipsRow = row.rectTransform;
+            tilesRow = Ui.New(Root, "Tiles");
+            float gap = (CardW - TileW * 3f) * 0.5f;
+            var skips = Tile("Skips", -(TileW + gap));
+            var top = Ui.Label(skips, "SKIPS", 13f, Theme.PanelText, Weight.Semi);
+            top.color = new Color(Theme.PanelText.r, Theme.PanelText.g, Theme.PanelText.b, 0.8f);
+            Ui.PlaceD(top.rectTransform, Ui.C, new Vector2(0f, 13f), new Vector2(TileW, 18f));
+            skipsValue = Ui.Label(skips, "4/4", 24f, Theme.PanelText, Weight.Bold);
+            Ui.PlaceD(skipsValue.rectTransform, Ui.C, new Vector2(0f, -9f), new Vector2(TileW, 30f));
+            MakeButton(skips.GetComponent<Image>(), OnSkipsTile);
 
-            skipsText = Ui.Label(skipsRow, "SKIPS TODAY", SkipsFont, Theme.PanelText, Weight.Semi, TextAnchor.MiddleLeft);
-            Ui.PlaceD(skipsText.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(SkipsPad, 0f), new Vector2(140f, SkipsH));
+            var themes = Tile("Themes", 0f);
+            IconTile(themes, Icon.Palette, "THEMES");
+            MakeButton(themes.GetComponent<Image>(), ScreenThemes.Open);
 
-            for (int i = 0; i < MaxSkipDots; i++)
-            {
-                var dot = Ui.Img(skipsRow, "Dot" + i, Theme.CircleHD, Theme.Teal);
-                dot.raycastTarget = false;
-                skipDots[i] = dot;
-            }
+            var shapes = Tile("Shapes", TileW + gap);
+            IconTile(shapes, Icon.Heart, "SHAPES");
+            MakeButton(shapes.GetComponent<Image>(), ScreenShapes.Open);
+        }
+
+        RectTransform Tile(string name, float x)
+        {
+            var img = Rounded(tilesRow, name, Theme.Panel, TileR);
+            var edge = img.gameObject.AddComponent<Shadow>();
+            edge.effectColor = Theme.PanelEdge;
+            edge.effectDistance = new Vector2(0f, -Theme.D(TileEdge));
+            edge.useGraphicAlpha = false;
+            Ui.PlaceD(img.rectTransform, Ui.C, new Vector2(x, 0f), new Vector2(TileW, TileH));
+            return img.rectTransform;
+        }
+
+        static void IconTile(RectTransform tile, Icon icon, string label)
+        {
+            var ic = Icons.Make(tile, icon, Theme.PanelText, 24f);
+            Ui.PlaceD(ic, Ui.C, new Vector2(0f, 10f), new Vector2(24f, 24f));
+            var t = Ui.Label(tile, label, 13f, Theme.PanelText, Weight.Bold);
+            Ui.PlaceD(t.rectTransform, Ui.C, new Vector2(0f, -17f), new Vector2(TileW, 18f));
         }
 
         /// <summary>RoundedHD image with a radiusD design px corner (sharp at any size).</summary>
@@ -262,12 +306,13 @@ namespace ArrowPuzzle
             return img;
         }
 
-        static void MakeButton(Image img, Action onClick)
+        static void MakeButton(Image img, Action onClick, bool squash = true)
         {
+            img.raycastTarget = true;
             var btn = img.gameObject.AddComponent<Button>();
             btn.targetGraphic = img;
             btn.transition = Selectable.Transition.None;
-            img.gameObject.AddComponent<PressScale>();
+            if (squash) img.gameObject.AddComponent<PressScale>();
             btn.onClick.AddListener(() =>
             {
                 Sfx.Play(Sfx.Id.Click);
@@ -306,7 +351,7 @@ namespace ArrowPuzzle
             Save.SkipsChanged -= SetSkips;
             Save.SkipsChanged += SetSkips;
             MusicPlayer.PlayHome();
-            mark.Apply(Wordmark.End);
+            previewKey = null; // the hero preview is drawn again (theme / progress may have changed elsewhere)
             Refresh();
             Layout();
             Debug.Log("[Coins] Home shows " + coins.text + " (saved " + Save.Coins + ")");
@@ -318,11 +363,19 @@ namespace ArrowPuzzle
             Save.CoinsChanged -= SetCoins;
             Save.SkipsChanged -= SetSkips;
             Ads.Banner(false, "ScreenHome"); // ignored when the next screen (game) asks for it in the same frame
+            skipRequest++;
+            skipWaiting = false;
+            toast.Hide();
             popT = -1f;
             slots[2].rt.localScale = Vector3.one;
+            if (preview != null) Destroy(preview); // frees the preview meshes
+            preview = null;
+            previewKey = null;
         }
 
-        /// <summary>Coins, skips, and the ruler back on the highest unlocked level.</summary>
+        static void Destroy(GameObject go) { UnityEngine.Object.Destroy(go); }
+
+        /// <summary>Coins, skips, chips and the ruler back on the highest unlocked level.</summary>
         void Refresh()
         {
             unlocked = Save.IsUnlocked(LevelPath.Count) ? LevelPath.Count : Mathf.Clamp(Save.UnlockedGlobal, 1, LevelPath.Count);
@@ -331,6 +384,10 @@ namespace ArrowPuzzle
             SetSelected(Save.UnlockedGlobal);
             SetCoins();
             SetSkips();
+            int shape = Campaign.ShapeIndexOf(Save.UnlockedGlobal);
+            shapeChipText.text = Campaign.Title(Campaign.Shapes[shape]).ToUpperInvariant() + "  "
+                                 + Campaign.ShapeProgress(shape) + "/" + Campaign.LevelsPerShape;
+            themeChipText.text = ((Theme.Current != null ? Theme.Current.Name : "Cream") + " theme").ToUpperInvariant();
         }
 
         void SetCoins()
@@ -341,26 +398,49 @@ namespace ArrowPuzzle
             Snap(coinPill);
         }
 
-        /// <summary>One dot per skip of today (4, more with a bonus): teal = left, grey = used. The row fits its content.</summary>
+        /// <summary>SKIPS tile: skips left today / today's total (4, more with a bonus); "..." while its video runs.</summary>
         void SetSkips()
         {
-            int left = Save.SkipsLeft;
-            int total = Mathf.Clamp(Save.SkipsPerDay + Save.SkipsBonusToday, 1, MaxSkipDots);
-            left = Mathf.Min(left, total);
-            float x = SkipsPad + skipsText.preferredWidth / Theme.K + SkipsTextGap;
-            for (int i = 0; i < MaxSkipDots; i++)
+            int total = Save.SkipsPerDay + Save.SkipsBonusToday;
+            skipsValue.text = skipWaiting ? "..." : Mathf.Min(Save.SkipsLeft, total) + "/" + total;
+        }
+
+        /// <summary>
+        /// SKIPS tile: with no skips left, one rewarded ad adds SkipBonus skips for today (as the game's Skip pill);
+        /// with skips left, a short note (they are used from a level).
+        /// </summary>
+        void OnSkipsTile()
+        {
+            if (skipWaiting) return;
+            if (Save.SkipsLeft > 0)
             {
-                var dot = skipDots[i];
-                bool on = i < total;
-                dot.gameObject.SetActive(on);
-                if (!on) continue;
-                dot.color = i < left ? Theme.Teal : SkipUsed;
-                Ui.PlaceD(dot.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(x, 0f), new Vector2(SkipDotD, SkipDotD));
-                x += SkipDotD + SkipDotGap;
+                toast.Show(Save.SkipsLeft + " skips left today. Use them in a level.", ToastY());
+                return;
             }
-            float w = Mathf.Ceil(x - SkipDotGap + SkipsPad);
-            skipsRow.sizeDelta = new Vector2(Theme.D(w), Theme.D(SkipsH));
-            Snap(skipsRow);
+            if (Ads.IsRewardedBusy) { toast.Show("Ad not ready, try again", ToastY()); return; }
+            int id = ++skipRequest;
+            skipWaiting = true;
+            SetSkips();
+            Ads.ShowRewarded(() =>
+            {
+                if (id != skipRequest) return;
+                skipWaiting = false;
+                Save.AddSkipBonus(SkipBonus); // raises SkipsChanged -> SetSkips
+                SetSkips();
+                toast.Show("+" + SkipBonus + " skips", ToastY());
+            }, () =>
+            {
+                if (id != skipRequest) return;
+                skipWaiting = false;
+                SetSkips();
+                toast.Show("Ad not ready, try again", ToastY());
+            });
+        }
+
+        float ToastY()
+        {
+            float banner = Ads.BannerHeightDesign;
+            return (banner > 0f ? banner + BannerGap : BottomPad) + TileH + TileEdge + 12f;
         }
 
         /// <summary>Kept within the unlocked levels; updates the ruler slots, prev / next and the PLAY label.</summary>
@@ -422,8 +502,8 @@ namespace ArrowPuzzle
         // ------------------------------------------------------------------ layout
 
         /// <summary>
-        /// Top bar and wordmark from the top; SKIPS TODAY and PLAY from the bottom, above the banner (or BottomPad
-        /// without one); the ruler centred between the wordmark and PLAY. Re-run when the height, the banner, the
+        /// Top bar from the top; tiles, PLAY and the ruler from the bottom, above the banner (or BottomPad without one);
+        /// the hero card fills what is left between the top bar and the ruler. Re-run when the height, the banner, the
         /// canvas scale or the safe area change. Button rects end on whole pixels.
         /// </summary>
         void Layout()
@@ -434,7 +514,7 @@ namespace ArrowPuzzle
             float scale = Root.lossyScale.x;
             Rect safe = Screen.safeArea;
             if (h <= 0f || (Mathf.Abs(h - laidOutH) < 0.5f && Mathf.Abs(under - laidOutUnder) < 0.5f &&
-                            Mathf.Approximately(scale, laidOutScale) && safe == laidOutSafe)) return;
+                            Mathf.Approximately(scale, laidOutScale) && safe == laidOutSafe && previewKey != null)) return;
             laidOutH = h;
             laidOutUnder = under;
             laidOutScale = scale;
@@ -446,19 +526,17 @@ namespace ArrowPuzzle
             Snap(settings);
             SetCoins();
 
-            float markY = Mathf.Clamp(h * MarkFrac, MarkMinY, MarkMaxY);
-            Ui.PlaceD(mark.Root, Ui.TC, Ui.C, new Vector2(0f, -markY), new Vector2(Wordmark.WidthD, Wordmark.HeightD));
+            // bottom up: tiles, PLAY, ruler
+            float tilesCY = h - under - TileEdge - TileH * 0.5f;
+            Ui.PlaceD(tilesRow, Ui.TC, Ui.C, new Vector2(0f, -tilesCY), new Vector2(CardW, TileH));
+            Snap(tilesRow);
 
-            float skipsCY = h - under - SkipsH * 0.5f;
-            Ui.PlaceD(skipsRow, Ui.TC, Ui.C, new Vector2(0f, -skipsCY), new Vector2(skipsRow.sizeDelta.x / Theme.K, SkipsH));
-            Snap(skipsRow);
-
-            float playTop = skipsCY - SkipsH * 0.5f - PlayToSkips - (PlayH + PlayEdge);
+            float playTop = tilesCY - TileH * 0.5f - TilesToPlay - (PlayH + PlayEdge);
             playRoot.localScale = Vector3.one;
             Ui.PlaceD(playRoot, Ui.TC, new Vector2(0f, -playTop), new Vector2(PlayW, PlayH + PlayEdge));
             Snap(playRoot);
 
-            float rulerY = (markY + MarkInkBelow + playTop) * 0.5f;
+            float rulerY = playTop - PlayToRuler - BigD * 0.5f;
             Ui.PlaceD(ruler, Ui.TC, Ui.C, new Vector2(0f, -rulerY), new Vector2(390f, BigD));
             Snap(ruler);
             // children back on their design positions first, so repeated snaps never add up
@@ -472,6 +550,37 @@ namespace ArrowPuzzle
                 Ui.PlaceD(slots[i].rt, Ui.C, new Vector2(SlotX[i], 0f), new Vector2(d, d));
                 Snap(slots[i].rt);
             }
+
+            // hero card: from CardTop down to the ruler (flexes with the screen and the banner)
+            float cardH = Mathf.Max(CardMinH, rulerY - BigD * 0.5f - RulerToCard - CardEdge - CardTop);
+            Ui.PlaceD(card, Ui.TL, new Vector2(0f, 1f), new Vector2(CardX, -CardTop), new Vector2(CardW, cardH));
+            Snap(card);
+            LayoutChips();
+            float previewH = cardH - PreviewPad - ChipInset - ChipH - 10f;
+            var size = new Vector2(CardW - PreviewPad * 2f, Mathf.Max(60f, previewH - PreviewPad));
+            Ui.PlaceD(previewHolder, Ui.TC, new Vector2(0.5f, 1f), new Vector2(0f, -PreviewPad), size);
+            DrawPreview(size);
+        }
+
+        /// <summary>The two chips along the bottom inside the card: shape chip left, theme chip right.</summary>
+        void LayoutChips()
+        {
+            float sw = shapeChipText.preferredWidth / Theme.K + ChipPad * 2f;
+            Ui.PlaceD(shapeChip.rectTransform, Ui.BL, new Vector2(0f, 0f), new Vector2(ChipInset, ChipInset), new Vector2(sw, ChipH));
+            float tw = themeChipText.preferredWidth / Theme.K + ChipPad * 2f;
+            Ui.PlaceD(themeChip.rectTransform, Ui.BR, new Vector2(1f, 0f), new Vector2(-ChipInset, ChipInset), new Vector2(tw, ChipH));
+        }
+
+        /// <summary>The current level's shape (thumbs.txt) in the current theme, as large as fits; redrawn only on a change.</summary>
+        void DrawPreview(Vector2 sizeD)
+        {
+            int shape = Campaign.ShapeIndexOf(Save.UnlockedGlobal);
+            var theme = Theme.Current ?? Themes.Get(Themes.Default);
+            string key = shape + "|" + theme.Id + "|" + Mathf.RoundToInt(sizeD.x) + "x" + Mathf.RoundToInt(sizeD.y);
+            if (key == previewKey && preview != null) return;
+            if (preview != null) Destroy(preview);
+            preview = LevelPreview.Create(previewHolder, Campaign.Thumb(shape), theme, sizeD, false).gameObject;
+            previewKey = key;
         }
 
         /// <summary>The backdrop covers the whole canvas (Root is the safe area), like the splash's background.</summary>
@@ -504,6 +613,7 @@ namespace ArrowPuzzle
 
         void OnBannerHeight()
         {
+            laidOutH = -1f;
             Layout();
         }
 
