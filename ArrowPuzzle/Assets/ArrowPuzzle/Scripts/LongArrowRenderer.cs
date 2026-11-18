@@ -511,7 +511,8 @@ namespace ArrowPuzzle
 
     /// <summary>
     /// Draws a long-arrow level for BoardView. Layers under the board (which has its own Canvas):
-    ///  Tiles (one mesh) -> Dots (one mesh, a dot per board cell) -> Grid (own Canvas: grid lines along the cell edges)
+    ///  Tiles (one mesh) -> Dots (one mesh, a dot per board cell) -> Grid (own Canvas: grid lines along the cell edges,
+    ///  shown by the Grid button)
     ///  -> Arrows (static arrows, PerBatch per mesh, CanvasGroup for the collapse) ->
     ///  Moving (own Canvas: one mesh per animating arrow, so its per-frame updates never re-batch the static arrows) ->
     ///  Fx (own Canvas: press / hint / halo overlays, impact ring).
@@ -715,10 +716,14 @@ namespace ArrowPuzzle
 
         // ------------------------------------------------------------------ touch grid
 
-        /// <summary>A finger is on the board (true) / all fingers lifted (false): the grid lines fade in / out.</summary>
-        public void SetGrid(bool on)
+        /// <summary>Grid lines on / off (BoardView, the Grid button): fade in / out, or at once with instant.</summary>
+        public void SetGrid(bool on, bool instant)
         {
             gridTarget = on ? 1f : 0f;
+            if (!instant || grid == null) return;
+            gridAlpha = gridTarget;
+            grid.gameObject.SetActive(on);
+            if (on) grid.canvasRenderer.SetAlpha(1f);
         }
 
         public int GridVerts { get { return grid != null ? grid.Verts : 0; } }

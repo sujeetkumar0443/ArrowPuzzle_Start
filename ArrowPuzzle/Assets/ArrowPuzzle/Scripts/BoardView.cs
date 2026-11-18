@@ -904,6 +904,7 @@ namespace ArrowPuzzle
                 colors.Add(p.baseColor);
             }
             lr.Build(level, cell, rest, colors);
+            lr.SetGrid(gridOn, true); // the Grid button state carries over to every level
             lr.Tick(RootPerLocal(), ScreenPerLocal());
             if (Debug.isDebugBuild) StartCoroutine(LogVertsLater()); // editor and development builds
         }
@@ -913,34 +914,39 @@ namespace ArrowPuzzle
             if (!isLong || lr == null || level == null) return;
             lr.Tick(RootPerLocal(), ScreenPerLocal());
             lr.TickGrid(Time.unscaledDeltaTime);
-            if (touching && Debug.isDebugBuild)
-            {
-                float ms = Time.unscaledDeltaTime * 1000f;
-                touchFrames++;
-                touchMs += ms;
-                if (ms > touchMaxMs) touchMaxMs = ms;
-            }
+            if (gridOn && Debug.isDebugBuild) GridPerf();
         }
 
-        // touch grid ([LongPerf] frame time while a finger is on the board, editor and development builds)
-        bool touching;
-        int touchFrames;
-        float touchMs, touchMaxMs;
+        // grid lines along the cell edges (ScreenGame's Grid button; Save.Grid)
+        bool gridOn;
+        int gridFrames;
+        float gridMs, gridMaxMs;
 
         /// <summary>
-        /// BoardZoom: true when the first finger goes down on the board area, false when the last one lifts. Long levels
-        /// fade the grid lines of the mask cells in / out. No effect on taps or on the press / hint highlight.
+        /// Grid lines on / off (the Grid button; applied at every level start). Long levels only; fades in 0.08 s / out
+        /// 0.25 s, nothing is drawn while off. No effect on taps or on the press / hint highlight.
         /// </summary>
-        public void SetTouching(bool on)
+        public void SetGrid(bool on, bool instant)
         {
-            if (on == touching) return;
-            touching = on;
-            if (lr != null) lr.SetGrid(on && isLong);
-            if (on) { touchFrames = 0; touchMs = touchMaxMs = 0f; }
-            else if (Debug.isDebugBuild && isLong && level != null && touchFrames > 0)
-                Debug.Log("[LongPerf] " + level.shape + " touch (grid on): " + touchFrames + " frames, avg "
-                          + (touchMs / touchFrames).ToString("F2") + " ms, max " + touchMaxMs.ToString("F2")
-                          + " ms | grid vertices " + lr.GridVerts + ", zoom " + RootPerLocal().ToString("F2"));
+            gridOn = on;
+            gridFrames = 0;
+            gridMs = gridMaxMs = 0f;
+            if (lr != null) lr.SetGrid(on && isLong, instant);
+        }
+
+        /// <summary>[LongPerf] (editor / development builds): frame time with the grid on, logged every 120 frames.</summary>
+        void GridPerf()
+        {
+            float ms = Time.unscaledDeltaTime * 1000f;
+            gridFrames++;
+            gridMs += ms;
+            if (ms > gridMaxMs) gridMaxMs = ms;
+            if (gridFrames < 120) return;
+            Debug.Log("[LongPerf] " + level.shape + " grid on: " + gridFrames + " frames, avg " + (gridMs / gridFrames).ToString("F2")
+                      + " ms, max " + gridMaxMs.ToString("F2") + " ms | grid vertices " + lr.GridVerts + ", dots " + lr.DotVerts
+                      + ", zoom " + RootPerLocal().ToString("F2"));
+            gridFrames = 0;
+            gridMs = gridMaxMs = 0f;
         }
 
         /// <summary>Root canvas units per board-local unit (board scale x zoom).</summary>

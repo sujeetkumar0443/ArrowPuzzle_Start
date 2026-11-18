@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ArrowPuzzle
 {
-    public enum Icon { Bulb, Star, Heart, Gear, Back, Pause, Restart, Home, Play, Sound, Vibrate, Lock, ArrowRight, Share, Shield, Chevron, Music, Check, Skip, Palette }
+    public enum Icon { Bulb, Star, Heart, Gear, Back, Pause, Restart, Home, Play, Sound, Vibrate, Lock, ArrowRight, Share, Shield, Chevron, Music, Check, Skip, Palette, Grid }
 
     /// <summary>
     /// Icons drawn in code (stroke polylines or generated sprites), copied from the design's 24x24 icon set.
@@ -138,6 +138,13 @@ namespace ArrowPuzzle
                     Rect(rt, 14.4f, 11.6f, 3.4f, 3.4f, 1.7f, color, sizeD);
                     break;
                 }
+
+                case Icon.Grid: // "#": two vertical and two horizontal lines
+                    Stroke(rt, color, stroke, s, P(9, 4), P(9, 20));
+                    Stroke(rt, color, stroke, s, P(15, 4), P(15, 20));
+                    Stroke(rt, color, stroke, s, P(4, 9), P(20, 9));
+                    Stroke(rt, color, stroke, s, P(4, 15), P(20, 15));
+                    break;
 
                 case Icon.Check:
                     Stroke(rt, color, 3f, s, P(5, 12.5f), P(10, 17.5f), P(19, 7));
