@@ -21,6 +21,19 @@ namespace ArrowPuzzle
         public const float GridPx = 1f;                     // touch grid line width, screen px at any zoom
         public const float GridAlpha = 0.14f, GridAlphaDark = 0.2f; // touch grid: InkSoft at this alpha (dark themes: more)
         public const float GridFadeIn = 0.08f, GridFadeOut = 0.25f; // s
+        public const float DotCell = 0.11f, DotMinPx = 1.2f;        // board dot radius: cells, at least screen px
+        public const float DotAlpha = 0.22f, DotAlphaDark = 0.28f;  // board dots: InkSoft at this alpha (dark themes: more)
+
+        /// <summary>Board dot colour for the current theme: InkSoft at DotAlpha (DotAlphaDark on dark themes: Night).</summary>
+        public static Color DotColor
+        {
+            get
+            {
+                var c = Theme.InkSoft;
+                c.a = Theme.Current != null && Theme.Current.Dark ? DotAlphaDark : DotAlpha;
+                return c;
+            }
+        }
 
         /// <summary>Touch grid colour for the current theme: InkSoft at GridAlpha (GridAlphaDark on dark themes: Night).</summary>
         public static Color GridColor
@@ -439,8 +452,67 @@ namespace ArrowPuzzle
     }
 
     /// <summary>
+    /// One dot at the centre of every mask cell (null mask = every cell), one mesh: a filled polygon with a 1 screen px
+    /// alpha-0 rim for anti-aliasing. The arrows' centre lines run through the dot centres. Static: the dots stay after an
+    /// arrow has left; rebuilt only when LongArrowRenderer's throttled zoom rebuild changes radius / feather.
+    /// </summary>
+    [RequireComponent(typeof(CanvasRenderer))]
+    public class DotGraphic : MaskableGraphic
+    {
+        readonly List<Vector2> centres = new List<Vector2>();
+        public float radius = 1f, feather = 1f; // board-local units
+        public int Verts { get; private set; }
+
+        public void Set(bool[,] m, int cols, int rows, float cell)
+        {
+            centres.Clear();
+            for (int y = 0; y < rows; y++)
+                for (int x = 0; x < cols; x++)
+                    if (m == null || m[x, y]) centres.Add(new Vector2((x + 0.5f) * cell, (y + 0.5f) * cell));
+            SetVerticesDirty();
+        }
+
+        public void Dirty() { SetVerticesDirty(); }
+
+        protected override void OnPopulateMesh(VertexHelper vh)
+        {
+            vh.Clear();
+            Color32 col = color, rim = col;
+            rim.a = 0;
+            // few segments: the dots are a few px wide; 8 is round enough there, 12 once they get big (zoomed in)
+            int seg = radius / Mathf.Max(1e-4f, feather) > 4f ? 12 : 8;
+            float rIn = Mathf.Max(radius - feather * 0.5f, radius * 0.5f), rOut = radius + feather * 0.5f;
+            var dirs = new Vector2[seg];
+            for (int k = 0; k < seg; k++)
+            {
+                float a = k * Mathf.PI * 2f / seg;
+                dirs[k] = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+            }
+            foreach (var c in centres)
+            {
+                int o = vh.currentVertCount;
+                vh.AddVert(c, col, Vector4.zero);
+                for (int k = 0; k < seg; k++)
+                {
+                    vh.AddVert(c + dirs[k] * rIn, col, Vector4.zero);
+                    vh.AddVert(c + dirs[k] * rOut, rim, Vector4.zero);
+                }
+                for (int k = 0; k < seg; k++)
+                {
+                    int i0 = o + 1 + 2 * k, i1 = o + 1 + 2 * ((k + 1) % seg);
+                    vh.AddTriangle(o, i0, i1);           // core
+                    vh.AddTriangle(i0, i0 + 1, i1 + 1);  // rim
+                    vh.AddTriangle(i1 + 1, i1, i0);
+                }
+            }
+            Verts = vh.currentVertCount;
+        }
+    }
+
+    /// <summary>
     /// Draws a long-arrow level for BoardView. Layers under the board (which has its own Canvas):
-    ///  Tiles (one mesh) -> Grid (own Canvas: touch grid lines, faded in while a finger is on the board) -> Arrows (static arrows, PerBatch per mesh, CanvasGroup for the collapse) ->
+    ///  Tiles (one mesh) -> Dots (one mesh, a dot per board cell) -> Grid (own Canvas: grid lines along the cell edges)
+    ///  -> Arrows (static arrows, PerBatch per mesh, CanvasGroup for the collapse) ->
     ///  Moving (own Canvas: one mesh per animating arrow, so its per-frame updates never re-batch the static arrows) ->
     ///  Fx (own Canvas: press / hint / halo overlays, impact ring).
     /// Line width is fixed on screen: every mesh is rebuilt when the board's screen scale changes (throttled).
@@ -462,6 +534,8 @@ namespace ArrowPuzzle
         CanvasGroup arrowsGroup;
         TileGraphic tiles;
         GridGraphic grid;
+        DotGraphic dots;
+        float dotR = -1f, dotF = -1f; // last built dot radius / feather (board-local)
         float gridAlpha, gridTarget; // touch grid fade, 0..1
         readonly List<StrokeGraphic> batches = new List<StrokeGraphic>();
         readonly List<Arrow> arrows = new List<Arrow>();
@@ -483,6 +557,7 @@ namespace ArrowPuzzle
         public RectTransform FxRoot { get { return fxRoot; } }
 
         public int TileVerts { get { return tiles != null ? tiles.Verts : 0; } }
+        public int DotVerts { get { return dots != null ? dots.Verts : 0; } }
 
         public int ArrowVerts
         {
@@ -505,6 +580,8 @@ namespace ArrowPuzzle
             var tg = Layer(root, "Tiles", false);
             tiles = tg.gameObject.AddComponent<TileGraphic>();
             tiles.raycastTarget = false;
+            dots = Layer(root, "Dots", false).gameObject.AddComponent<DotGraphic>();
+            dots.raycastTarget = false;
             var gl = Layer(root, "Grid", true); // own canvas: its fade never re-batches the arrows
             grid = gl.gameObject.AddComponent<GridGraphic>();
             grid.raycastTarget = false;
@@ -560,6 +637,9 @@ namespace ArrowPuzzle
             tiles.color = LongStyle.Tile;
             tiles.Set(data.mask, data.cols, data.rows, cell);
             tiles.gameObject.SetActive(LongStyle.BoardTiles);
+            dots.color = LongStyle.DotColor;
+            dots.Set(data.mask, data.cols, data.rows, cell);
+            dotR = dotF = -1f;
             grid.color = LongStyle.GridColor;
             grid.Set(data.mask, data.cols, data.rows, cell);
             gridAlpha = gridTarget = 0f;
@@ -618,6 +698,14 @@ namespace ArrowPuzzle
             feather = LongStyle.FeatherPx / Mathf.Max(1e-4f, screenPerLocal);
             grid.width = LongStyle.GridPx / Mathf.Max(1e-4f, screenPerLocal);
             if (grid.gameObject.activeSelf) grid.Dirty(); // hidden: built with this width when it shows (OnEnable)
+            // dots: 0.11 cell, at least DotMinPx on screen; the mesh is rebuilt only when that size really changed
+            float r = Mathf.Max(LongStyle.DotCell * cell, LongStyle.DotMinPx / Mathf.Max(1e-4f, screenPerLocal));
+            if (Mathf.Abs(r - dotR) > dotR * 0.02f || Mathf.Abs(feather - dotF) > dotF * 0.25f)
+            {
+                dotR = dots.radius = r;
+                dotF = dots.feather = feather;
+                dots.Dirty();
+            }
             foreach (var b in batches) if (b.gameObject.activeSelf) b.Dirty();
             foreach (var kv in moving) kv.Value.Dirty();
             foreach (var kv in halos) kv.Value.Dirty();

@@ -1259,7 +1259,7 @@ namespace ArrowPuzzle
             if (!isLong || level == null) yield break;
             Debug.Log("[LongPerf] " + level.shape + " loaded: " + pieces.Count + " arrows, cell " + cell.ToString("F1")
                       + " units, board vertices " + (lr.ArrowVerts + lr.TileVerts) + " (arrows " + lr.ArrowVerts + " in "
-                      + lr.BatchCount + " batches, tiles " + lr.TileVerts + ")");
+                      + lr.BatchCount + " batches, tiles " + lr.TileVerts + "), dots " + lr.DotVerts + ", grid " + lr.GridVerts + " (when shown)");
         }
     }
 }
