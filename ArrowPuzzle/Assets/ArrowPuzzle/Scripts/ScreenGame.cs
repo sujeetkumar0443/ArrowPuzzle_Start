@@ -76,6 +76,17 @@ namespace ArrowPuzzle
         RectTransform area, card, hintRt, restartRt;
         BoardZoom zoom;
         int level; // global level (LevelPath / Campaign)
+
+        // a level past the prebuilt set that is still being generated: a short loading state, then StartLevel again
+        int waitLevel;
+        RectTransform loadingRt;
+        Text loadingText;
+
+        /// <summary>
+        /// Dev "jump to level N" (ScreenShapePreview, editor / development builds): this visit ignores the release cap and
+        /// the locks, and NEXT keeps going. Cleared when the game screen hides.
+        /// </summary>
+        public static bool DevJump;
         float btnBottom = BtnBottom, toastY = ToastY; // move up above the banner (ApplyBannerLayout)
         bool bannerLayoutPending; // the banner height changed while a popup had it hidden (RestoreBanner)
 
@@ -128,7 +139,50 @@ namespace ArrowPuzzle
             area.SetAsLastSibling(); // exiting arrows fly over the buttons too (nothing clips the board)
             BuildToast();
             BuildFlash();
+            BuildLoading();
+            Root.gameObject.AddComponent<HomeTicker>().tick = TickLoading;
             BannerDebug.Create(Root, "ScreenGame"); // only when Ads.ShowBannerDebug
+        }
+
+        /// <summary>Cover over the whole screen while a generated level is built (blocks taps, Back still works).</summary>
+        void BuildLoading()
+        {
+            var img = Ui.Img(Root, "Loading", null, new Color(Theme.Bg.r, Theme.Bg.g, Theme.Bg.b, 0.94f));
+            loadingRt = img.rectTransform;
+            Ui.Fill(loadingRt);
+            loadingText = Ui.Label(loadingRt, "", 22f, Theme.InkSoft, Weight.Semi);
+            Ui.PlaceD(loadingText.rectTransform, Ui.C, Vector2.zero, new Vector2(320f, 40f));
+            loadingRt.gameObject.SetActive(false);
+        }
+
+        void ShowLoading(int g)
+        {
+            waitLevel = g;
+            level = g;
+            levelText.text = "LEVEL " + g;
+            loadingRt.gameObject.SetActive(true);
+            loadingRt.SetAsLastSibling();
+            TickLoading();
+        }
+
+        void HideLoading()
+        {
+            waitLevel = 0;
+            if (loadingRt != null) loadingRt.gameObject.SetActive(false);
+        }
+
+        void TickLoading()
+        {
+            if (waitLevel <= 0) return;
+            if (Levels.IsReady(waitLevel))
+            {
+                int g = waitLevel;
+                waitLevel = 0;
+                StartLevel(g);
+                return;
+            }
+            int dots = (int)(Time.unscaledTime * 3f) % 4;
+            loadingText.text = "Building level " + waitLevel + new string('.', dots);
         }
 
         /// <summary>Small ink pill above the buttons ("+3 hints"), hidden until Toast() runs. Never takes taps.</summary>
@@ -418,9 +472,14 @@ namespace ArrowPuzzle
             Save.UseSkip();   // raises SkipsChanged -> RefreshSkip
             Save.SkipLevel(g);
             int next = g + 1;
-            if (next > LevelPath.Count || !Save.IsUnlocked(next))
+            if (Campaign.PastCap(next) && !DevJump)
             {
-                GameApp.I.Show("ScreenHome"); // the last level skipped: Home
+                GameApp.I.Show("ScreenComingSoon"); // the last level of this release skipped
+                return;
+            }
+            if (!Save.IsUnlocked(next) && !DevJump)
+            {
+                GameApp.I.Show("ScreenHome");
                 return;
             }
             StartLevel(next); // straight to the next level: no popup, no interstitial
@@ -592,6 +651,8 @@ namespace ArrowPuzzle
         public override void OnHide()
         {
             LongSamplesDev.Stop(); // the dev sample route ends when the game screen goes away
+            DevJump = false;
+            HideLoading();
             Ads.BannerHeightChanged -= OnBannerHeight;
             Save.SkipsChanged -= RefreshSkip;
             skipRequest++;       // a video still running can't skip a level on a screen that is gone
@@ -619,12 +680,13 @@ namespace ArrowPuzzle
 
         /// <summary>
         /// Loads global level n (also for popups: Next / Retry while this screen is already showing). n is kept within
-        /// 1..LevelPath.Count; the level is campaign level n (Levels.For, long arrows).
+        /// at least 1; past Campaign.ReleaseLevelCap it shows ScreenComingSoon (not for a dev jump). A generated level that
+        /// is not built yet shows the loading cover; TickLoading starts it when it is ready.
         /// </summary>
         public void StartLevel(int n)
         {
             Time.timeScale = 1f; // safety: a level never starts frozen
-            int g = Mathf.Clamp(n, 1, LevelPath.Count);
+            int g = Mathf.Max(1, n);
             var type = GameMode.Shapes; // kept for GameApp.CurrentMode / ClearedMode (one level type now)
             LevelData data;
             bool sample = LongSamplesDev.Active > 0;
@@ -643,11 +705,31 @@ namespace ArrowPuzzle
                 g = Mathf.Max(1, Save.UnlockedGlobal - 1);
                 data = LongSamplesDev.Load();
             }
-            else data = Levels.For(g);
+            else
+            {
+                if (Campaign.PastCap(g) && !DevJump)
+                {
+                    HideLoading();
+                    GameApp.I.Show("ScreenComingSoon");
+                    return;
+                }
+                data = Levels.TryGet(g);
+                if (data == null && !Levels.IsReady(g))
+                {
+                    ShowLoading(g); // generated in the background; TickLoading comes back here
+                    return;
+                }
+            }
+            HideLoading();
             if (data == null)
             {
                 Debug.LogError("[ArrowPuzzle] No level " + g + " (" + Campaign.TypeKey(g) + ")");
                 return;
+            }
+            if (!sample)
+            {
+                // the next two levels start building now (no-op for prebuilt ones), so NEXT rarely waits
+                for (int k = 1; k <= 2; k++) if (Campaign.IsPlayable(g + k) || DevJump) Levels.Prefetch(g + k);
             }
             mode = type;
             level = g;
@@ -729,7 +811,7 @@ namespace ArrowPuzzle
             GameApp.I.ResultLives = Board.Lives;
             int stars = Mathf.Clamp(Board.Lives, 1, 3);
             int prevStars = Save.Stars(level);                                          // for the map (read only)
-            bool unlocks = level == Save.UnlockedGlobal && level < LevelPath.Count;     // what LevelWon will do
+            bool unlocks = level == Save.UnlockedGlobal;                                 // what LevelWon will do
             Save.SetStars(level, stars);
             Save.LevelWon(level);
             // hand-off to the map's unlock animation (played only after PopupWin's NEXT)

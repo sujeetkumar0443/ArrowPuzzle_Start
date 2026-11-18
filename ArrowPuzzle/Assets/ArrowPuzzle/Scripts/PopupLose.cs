@@ -513,9 +513,14 @@ namespace ArrowPuzzle
             GameApp.I.Close("PopupLose");
             int next = g + 1;
             var game = GameApp.I.Get<ScreenGame>();
-            if (next > LevelPath.Count || !Save.IsUnlocked(next) || game == null)
+            if (Campaign.PastCap(next) && !ScreenGame.DevJump && game != null)
             {
-                GameApp.I.Show("ScreenHome"); // the last level skipped (or no game screen): Home
+                GameApp.I.Show("ScreenComingSoon"); // the last level of this release skipped
+                return;
+            }
+            if ((!Save.IsUnlocked(next) && !ScreenGame.DevJump) || game == null)
+            {
+                GameApp.I.Show("ScreenHome"); // locked (or no game screen): Home
                 return;
             }
             GameApp.I.CurrentLevel = next;

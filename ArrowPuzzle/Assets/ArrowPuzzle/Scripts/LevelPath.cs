@@ -1,29 +1,33 @@
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// The one path of levels: the long-arrow campaign (Campaign: 333 levels, every 3rd a shape). Global level g is the
-    /// campaign level g; its shape, arrow count and difficulty come from Campaign / index.txt (no level is parsed).
-    /// The old Classic / Shapes / Mosaic cycle (150 levels) is kept only for the one-time save migration and the music
-    /// rotation (Old*, Music*).
+    /// The one path of levels (Campaign): level g is built from its number, with no cap in the code (only
+    /// Campaign.ReleaseLevelCap limits play). The old Classic / Shapes / Mosaic cycle (150 levels) is kept only for the
+    /// one-time save migration and the music rotation (Old*, Music*).
     /// </summary>
     public static class LevelPath
     {
-        public const int Count = Campaign.TotalLevels;
-
         /// <summary>"Hard" above this many arrows (analytics label).</summary>
         public const int EasyMaxArrows = 35;
 
-        /// <summary>Display type of the level: its shape ("Heart") or "Board" for a normal level.</summary>
+        /// <summary>Display type of the level: its base shape ("Heart") or procedural kind ("Mandala").</summary>
         public static string TypeName(int g)
         {
             return Campaign.TypeTitle(g);
         }
 
-        /// <summary>"Easy" (at most EasyMaxArrows arrows) or "Hard", from index.txt.</summary>
+        /// <summary>
+        /// "Easy" (at most EasyMaxArrows arrows) or "Hard": from index.txt for a prebuilt level; a generated level's count
+        /// is not known before it is built, so there d >= HardD counts as Hard.
+        /// </summary>
         public static string Difficulty(int g)
         {
-            return Campaign.ArrowCount(g) > EasyMaxArrows ? "Hard" : "Easy";
+            int n = Campaign.ArrowCount(g);
+            if (n > 0) return n > EasyMaxArrows ? "Hard" : "Easy";
+            return Campaign.D(g) >= HardD ? "Hard" : "Easy";
         }
+
+        public const double HardD = 0.5;
 
         // ------------------------------------------------------------------ the old 150-level cycle
 

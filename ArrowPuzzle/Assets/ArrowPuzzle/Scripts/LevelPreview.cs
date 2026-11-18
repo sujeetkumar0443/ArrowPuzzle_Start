@@ -15,6 +15,12 @@ namespace ArrowPuzzle
         /// </summary>
         public static RectTransform Create(RectTransform parent, LevelData lv, ThemeData theme, Vector2 sizeD, bool faded)
         {
+            return Create(parent, lv, theme, sizeD, faded, false);
+        }
+
+        /// <summary>silhouette = only the shape's cells, in a dark ink tone, no arrows (locked gallery cards).</summary>
+        public static RectTransform Create(RectTransform parent, LevelData lv, ThemeData theme, Vector2 sizeD, bool faded, bool silhouette)
+        {
             var root = Ui.New(parent, "Preview");
             root.anchorMin = root.anchorMax = root.pivot = new Vector2(0.5f, 0.5f);
             root.sizeDelta = sizeD * Theme.K;
@@ -27,6 +33,7 @@ namespace ArrowPuzzle
 
             Color tileC = theme.Tile, lineFade = Mix(theme.Card, theme.Ink, 0.28f);
             if (faded) tileC = Mix(theme.Card, theme.Tile, 0.5f);
+            if (silhouette) tileC = Mix(theme.Card, theme.Ink, SilhouetteInk);
 
             if (lv.mask != null)
             {
@@ -35,6 +42,7 @@ namespace ArrowPuzzle
                 tg.color = tileC;
                 tg.Set(lv.mask, lv.cols, lv.rows, cell);
             }
+            if (silhouette) return root;
 
             var sg = Layer(board, "Arrows").gameObject.AddComponent<StrokeGraphic>();
             sg.raycastTarget = false;
@@ -72,6 +80,8 @@ namespace ArrowPuzzle
             sg.Dirty();
             return root;
         }
+
+        const float SilhouetteInk = 0.78f; // locked silhouettes: mostly the theme's ink over its card colour
 
         static StrokeStyle Style(float cell, float line, float feather, float mul, bool head)
         {

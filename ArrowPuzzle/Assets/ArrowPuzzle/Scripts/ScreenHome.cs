@@ -348,6 +348,9 @@ namespace ArrowPuzzle
             previewKey = null; // the hero preview is drawn again (theme / progress may have changed elsewhere)
             Refresh();
             Layout();
+            // past the prebuilt set: the level PLAY starts (and the one after) begin building now
+            if (Campaign.IsPlayable(Save.UnlockedGlobal)) Levels.Prefetch(Save.UnlockedGlobal);
+            if (Campaign.IsPlayable(Save.UnlockedGlobal + 1)) Levels.Prefetch(Save.UnlockedGlobal + 1);
             Debug.Log("[Coins] Home shows " + coins.text + " (saved " + Save.Coins + ")");
         }
 
@@ -372,7 +375,8 @@ namespace ArrowPuzzle
         /// <summary>Coins, skips, chips and the ruler back on the highest unlocked level.</summary>
         void Refresh()
         {
-            unlocked = Save.IsUnlocked(LevelPath.Count) ? LevelPath.Count : Mathf.Clamp(Save.UnlockedGlobal, 1, LevelPath.Count);
+            // highest level the ruler offers: the unlocked one, kept within this release (ReleaseLevelCap)
+            unlocked = Campaign.ReleaseLevelCap > 0 ? Mathf.Min(Save.UnlockedGlobal, Campaign.ReleaseLevelCap) : Save.UnlockedGlobal;
             popT = -1f;
             slots[2].rt.localScale = Vector3.one;
             SetSelected(Save.UnlockedGlobal);
@@ -446,7 +450,7 @@ namespace ArrowPuzzle
             {
                 var s = slots[i];
                 int l = selected + i - 2;
-                bool on = l >= 1 && l <= LevelPath.Count;
+                bool on = Campaign.IsPlayable(l);
                 s.rt.gameObject.SetActive(on);
                 s.level = on ? l : 0;
                 if (!on) continue;
@@ -501,6 +505,12 @@ namespace ArrowPuzzle
 
         void Play()
         {
+            // every level of this release done and the last one picked: "More levels coming soon" (it offers a replay)
+            if (Campaign.PastCap(Save.UnlockedGlobal) && selected == unlocked)
+            {
+                GameApp.I.Show("ScreenComingSoon");
+                return;
+            }
             GameApp.I.CurrentLevel = selected;
             GameApp.I.Show("ScreenGame");
         }
@@ -588,12 +598,18 @@ namespace ArrowPuzzle
             var theme = Theme.Current ?? Themes.Get(Themes.Default);
             string key = level + "|" + theme.Id + "|" + Mathf.RoundToInt(sizeD.x) + "x" + Mathf.RoundToInt(sizeD.y);
             if (key == previewKey && preview != null) return;
+            var data = HeroLevel(level);
+            if (data == null)
+            {
+                previewKey = null; // a generated level still building: the layout check tries again next frame
+                return;
+            }
             if (preview != null) Destroy(preview);
-            preview = LevelPreview.Create(previewHolder, HeroLevel(level), theme, sizeD, false).gameObject;
+            preview = LevelPreview.Create(previewHolder, data, theme, sizeD, false).gameObject;
             previewKey = key;
         }
 
-        // the last parsed hero level (Levels.For parses one level; its file text is cached there too)
+        // the last parsed hero level (Levels.TryGet: null while a generated level is still building)
         static int heroLevel;
         static LevelData heroData;
 
@@ -601,7 +617,7 @@ namespace ArrowPuzzle
         {
             if (heroData == null || heroLevel != level)
             {
-                heroData = Levels.For(level);
+                heroData = Levels.TryGet(level);
                 heroLevel = level;
             }
             return heroData;

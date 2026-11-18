@@ -13,8 +13,9 @@ namespace ArrowPuzzle
         static bool AllLevels { get { return UnlockAllLevels; } } // property, so "UnlockAllLevels || x" gives no unreachable-code warning
 
         /// <summary>
-        /// Highest unlocked global level (LevelPath). Without the key yet (first run, or progress from the mode
-        /// version) it starts at the first level that is not completed, or the last level when all are done.
+        /// Highest unlocked global level (no upper limit: it may pass Campaign.ReleaseLevelCap, so raising the cap
+        /// later continues where the player stopped). Without the key yet (first run, or progress from the mode
+        /// version) it starts at the first level that is not completed.
         /// </summary>
         public static int UnlockedGlobal
         {
@@ -24,13 +25,13 @@ namespace ArrowPuzzle
                 if (!PlayerPrefs.HasKey(UnlockedKey))
                 {
                     int g = 1;
-                    while (g < LevelPath.Count && IsCompleted(g)) g++;
+                    while (IsCompleted(g)) g++;
                     PlayerPrefs.SetInt(UnlockedKey, g);
                     PlayerPrefs.Save();
                 }
-                return Mathf.Clamp(PlayerPrefs.GetInt(UnlockedKey, 1), 1, LevelPath.Count);
+                return Mathf.Max(1, PlayerPrefs.GetInt(UnlockedKey, 1));
             }
-            set { PlayerPrefs.SetInt(UnlockedKey, Mathf.Clamp(value, 1, LevelPath.Count)); PlayerPrefs.Save(); }
+            set { PlayerPrefs.SetInt(UnlockedKey, Mathf.Max(1, value)); PlayerPrefs.Save(); }
         }
 
         public static bool IsUnlocked(int g)
@@ -54,7 +55,7 @@ namespace ArrowPuzzle
         /// <summary>The unlock rule shared by a win and a skip: finishing the highest unlocked level opens the next one.</summary>
         static void UnlockAfter(int g)
         {
-            if (g == UnlockedGlobal && g < LevelPath.Count) UnlockedGlobal = g + 1;
+            if (g == UnlockedGlobal) UnlockedGlobal = g + 1;
         }
 
         // ------------------------------------------------------------------ skip level (rewarded, daily limit)
@@ -123,7 +124,7 @@ namespace ArrowPuzzle
         /// </summary>
         public static void SkipLevel(int g)
         {
-            g = Mathf.Clamp(g, 1, LevelPath.Count);
+            g = Mathf.Max(1, g);
             if (Stars(g) <= 0) SetStars(g, 1);
             UnlockAfter(g);
         }
@@ -240,10 +241,17 @@ namespace ArrowPuzzle
             return PlayerPrefs.GetInt(StarsKey(g), 0);
         }
 
-        /// <summary>Keeps the best result: only a higher star count is saved.</summary>
+        /// <summary>Keeps the best result: only a higher star count is saved (and the running totals follow).</summary>
         public static void SetStars(int g, int stars)
         {
-            if (stars > Stars(g)) PlayerPrefs.SetInt(StarsKey(g), stars);
+            int old = Stars(g);
+            if (stars > old)
+            {
+                Totals();
+                PlayerPrefs.SetInt(StarsKey(g), stars);
+                PlayerPrefs.SetInt(TotalStarsKey, PlayerPrefs.GetInt(TotalStarsKey, 0) + stars - old);
+                if (old <= 0) PlayerPrefs.SetInt(TotalDoneKey, PlayerPrefs.GetInt(TotalDoneKey, 0) + 1);
+            }
             PlayerPrefs.Save();
         }
 
@@ -260,22 +268,49 @@ namespace ArrowPuzzle
             PlayerPrefs.Save();
         }
 
-        /// <summary>Completed levels on the whole path.</summary>
+        // running totals (no loop over a level count): kept by SetStars
+        const string TotalDoneKey = "ap_total_completed", TotalStarsKey = "ap_total_stars", TotalsKey = "ap_totals_v1";
+
+        /// <summary>Completed levels on the whole path (running total).</summary>
         public static int CompletedLevels()
         {
-            int n = 0;
-            for (int g = 1; g <= LevelPath.Count; g++)
-                if (IsCompleted(g)) n++;
-            return n;
+            Totals();
+            return PlayerPrefs.GetInt(TotalDoneKey, 0);
         }
 
-        /// <summary>Stars over the whole path.</summary>
+        /// <summary>Stars over the whole path (running total).</summary>
         public static int TotalStars()
         {
-            int sum = 0;
-            for (int g = 1; g <= LevelPath.Count; g++) sum += Stars(g);
-            return sum;
+            Totals();
+            return PlayerPrefs.GetInt(TotalStarsKey, 0);
         }
+
+        static bool totalsReady;
+
+        /// <summary>
+        /// Once per install: the totals are counted from the per-level stars saved before they existed. Levels are only
+        /// won in order (plus dev jumps), so counting stops after TotalsGap empty levels in a row past the unlocked one.
+        /// </summary>
+        static void Totals()
+        {
+            if (totalsReady) return;
+            totalsReady = true;
+            Migrate();
+            if (PlayerPrefs.GetInt(TotalsKey, 0) == 1) return;
+            int unlocked = PlayerPrefs.GetInt(UnlockedKey, 1), done = 0, stars = 0, empty = 0;
+            for (int g = 1; g <= unlocked || empty < TotalsGap; g++)
+            {
+                int s = PlayerPrefs.GetInt(StarsKey(g), 0);
+                if (s > 0) { done++; stars += s; empty = 0; }
+                else if (g > unlocked) empty++;
+            }
+            PlayerPrefs.SetInt(TotalDoneKey, done);
+            PlayerPrefs.SetInt(TotalStarsKey, stars);
+            PlayerPrefs.SetInt(TotalsKey, 1);
+            PlayerPrefs.Save();
+        }
+
+        const int TotalsGap = 50;
 
         /// <summary>A campaign shape (0-based Campaign index) is open once UnlockedGlobal reaches its first level.</summary>
         public static bool IsShapeUnlocked(int shapeIndex) { return Campaign.IsShapeUnlocked(shapeIndex); }

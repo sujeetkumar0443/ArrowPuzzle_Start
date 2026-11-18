@@ -5,11 +5,11 @@ using UnityEngine.UI;
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// SHAPES gallery: header (back, title, live coin pill), subtitle, a scrolling 3-column grid of the 37 campaign shapes
-    /// and a dark NEXT SHAPE panel under it. Cards: COMPLETE (green check, its round-0 level done) / Next (the next shape
-    /// level coming: teal ring, "Level N") / locked (faded preview, lock badge, grey "Level N"). Thumbnails come from
-    /// thumbs.txt, are created as cards scroll into view and freed on hide. Tap: unlocked = play its round-0 level
-    /// (Campaign.FirstLevel, a replay once done); locked = toast.
+    /// SHAPES gallery: header (back, title, live coin pill), subtitle, a scrolling 3-column grid of all 100 base shapes
+    /// in level order and a dark NEXT SHAPE panel under it. Cards: COMPLETE (green check, its first level done) / Next
+    /// (the next shape level coming: teal ring, "Level N") / locked (dark silhouette, lock badge, grey "Level N").
+    /// Thumbnails come from thumbs.txt, are created as cards scroll into view and freed on hide. Tap: unlocked = play
+    /// its first level (Campaign.FirstLevel, a replay once done); locked = toast.
     /// Open with ScreenShapes.Open(); back returns to the screen that opened it.
     /// </summary>
     public class ScreenShapes : AppScreen
@@ -150,10 +150,10 @@ namespace ArrowPuzzle
             float k;
             if (next >= Campaign.ShapeCount)
             {
-                panelTitle.text = "ALL SHAPES UNLOCKED";
-                panelLevel.text = "Level " + unlocked + " / " + Campaign.TotalLevels;
-                panelHint.text = Campaign.TotalLevels - unlocked > 0 ? (Campaign.TotalLevels - unlocked) + " levels to the end" : "You reached the last level";
-                k = unlocked / (float)Campaign.TotalLevels;
+                panelTitle.text = "ALL " + Campaign.ShapeCount + " SHAPES UNLOCKED";
+                panelLevel.text = "Level " + unlocked;
+                panelHint.text = "New levels remix them with new twists";
+                k = 1f;
             }
             else
             {
@@ -182,7 +182,7 @@ namespace ArrowPuzzle
                 if (c.preview != null || c.holder == null) continue;
                 if (!ScreenKit.InView(c.slot, scroll.viewport, CardH)) continue;
                 var lv = Campaign.Thumb(c.shape);
-                c.preview = LevelPreview.Create(c.holder, lv, theme, new Vector2(PreviewD, PreviewD), c.locked).gameObject;
+                c.preview = LevelPreview.Create(c.holder, lv, theme, new Vector2(PreviewD, PreviewD), c.locked, c.locked).gameObject;
                 c.preview.transform.SetAsFirstSibling();
             }
         }

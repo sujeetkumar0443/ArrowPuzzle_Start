@@ -6,8 +6,9 @@ using UnityEngine;
 namespace ArrowPuzzle
 {
     /// <summary>
-    /// "Check level path": every campaign level loads through Levels.For and matches index.txt.
-    /// "Sanity Check Campaign Levels": a few levels through Levels.For with size, arrows, free % and the peel test.
+    /// "Check level path": every prebuilt level loads through Levels.For, matches index.txt and its spec, plus the level
+    /// plan of levels 1-1000 (no base shape twice within 20 levels, no shape key on two consecutive levels).
+    /// "Sanity Check Campaign Levels": a few levels, prebuilt and generated (past the files), with the peel test.
     /// </summary>
     public static class LevelPathEditorTools
     {
@@ -15,28 +16,30 @@ namespace ArrowPuzzle
         static void CheckPath()
         {
             var list = new StringBuilder();
-            int failed = 0, hard = 0;
-            for (int g = 1; g <= LevelPath.Count; g++)
+            int failed = 0, hard = 0, n = Campaign.PrebuiltCount;
+            for (int g = 1; g <= n; g++)
             {
                 var data = Levels.For(g);
-                bool ok = data != null && data.pieces.Count > 0 && data.number == g && data.shape == (Campaign.ShapeOfLevel(g) ?? LongLevelGen.BoardShape)
+                var sp = Campaign.Spec(g);
+                bool ok = data != null && data.pieces.Count > 0 && data.number == g && System.Array.IndexOf(sp.Candidates, data.shape) >= 0
                           && data.pieces.Count == Campaign.ArrowCount(g);
                 if (!ok) failed++;
                 string difficulty = LevelPath.Difficulty(g);
                 if (difficulty == "Hard") hard++;
-                list.Append("\n  ").Append(g).Append(" -> ").Append(Campaign.TypeTitle(g))
-                    .Append(Campaign.IsShape(g) ? " round " + (Campaign.RoundOf(g) + 1) : "").Append(", d ")
-                    .Append(Campaign.Difficulty(g).ToString("0.###")).Append(", ").Append(difficulty);
-                if (data != null) list.Append(", ").Append(data.pieces.Count).Append(" arrows");
+                list.Append("\n  ").Append(g).Append(" -> ").Append(data != null ? data.shape : sp.Key).Append(", d ")
+                    .Append(Campaign.D(g).ToString("0.###")).Append(", ").Append(difficulty);
+                if (data != null) list.Append(", ").Append(data.cols).Append('x').Append(data.rows).Append(", ").Append(data.pieces.Count).Append(" arrows");
                 if (!ok) list.Append("  FAILED");
             }
-            string head = "Level path: " + LevelPath.Count + " levels, " + (LevelPath.Count - failed) + " load OK, "
-                          + (LevelPath.Count - hard) + " Easy / " + hard + " Hard";
-            if (failed == 0) Debug.Log(head + list);
+            var plan = LongCampaignBuild.CheckPlan(1000, 20);
+            string head = "Level path: " + n + " prebuilt levels, " + (n - failed) + " load OK, " + (n - hard) + " Easy / " + hard
+                          + " Hard; plan of levels 1-1000: " + (plan.Count == 0 ? "no repeats within 20 levels" : plan.Count + " problems:\n  "
+                          + string.Join("\n  ", plan.ToArray()));
+            if (failed == 0 && plan.Count == 0) Debug.Log(head + list);
             else Debug.LogError(head + ", " + failed + " FAILED" + list);
         }
 
-        static readonly int[] SanityLevels = { 1, 2, 3, 4, 6, 9, 30, 100, 200, 333 };
+        static readonly int[] SanityLevels = { 1, 2, 3, 5, 6, 50, 100, 101, 104, 250, 300, 301, 302, 304, 1000 };
 
         [MenuItem("Arrow/Long Levels/Sanity Check Campaign Levels")]
         static void Sanity()
@@ -45,12 +48,13 @@ namespace ArrowPuzzle
             bool all = true;
             foreach (int g in SanityLevels)
             {
-                var data = Levels.For(g);
+                var data = Levels.For(g); // past the prebuilt files this generates on the main thread (slow, editor only)
                 if (data == null) { sb.Append("\n  ").Append(g).Append(": MISSING"); all = false; continue; }
                 int free;
                 bool solvable = Peel(data, out free);
                 all &= solvable && data.longArrows;
-                sb.Append("\n  ").Append(g).Append(' ').Append(data.shape).Append(" d ").Append(Campaign.Difficulty(g).ToString("0.###"))
+                sb.Append("\n  ").Append(g).Append(' ').Append(data.shape).Append(" d ").Append(Campaign.D(g).ToString("0.###"))
+                  .Append(" tangle ").Append(Campaign.Tangle(g).ToString("0.##"))
                   .Append(": ").Append(data.cols).Append('x').Append(data.rows).Append(", ").Append(data.pieces.Count).Append(" arrows, free ")
                   .Append((100f * free / Mathf.Max(1, data.pieces.Count)).ToString("0")).Append("%, ")
                   .Append(solvable && data.longArrows ? "PASS" : "FAIL");

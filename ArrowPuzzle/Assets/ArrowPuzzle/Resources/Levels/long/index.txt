@@ -1,334 +1,301 @@
-# Campaign index (Arrow/Long Levels/Build Full Level Set): level kind file indexInFile shape cols rows arrowCount d
-1 normal long/normal_01 0 - 8 11 8 0
-2 normal long/normal_01 1 - 8 11 11 0.022
-3 shape long/shape_heart 0 heart 12 12 12 0.045
-4 normal long/normal_01 2 - 9 13 13 0.069
-5 normal long/normal_01 3 - 7 11 13 0
-6 shape long/shape_hourglass 0 hourglass 14 20 23 0.117
-7 normal long/normal_01 4 - 9 14 9 0.141
-8 normal long/normal_01 5 - 11 14 18 0.165
-9 shape long/shape_paw 0 paw 15 13 11 0.188
-10 normal long/normal_01 6 - 12 20 19 0.31
-11 normal long/normal_01 7 - 12 18 14 0.231
-12 shape long/shape_cat 0 cat 16 20 25 0.251
-13 normal long/normal_01 8 - 12 19 20 0.269
-14 normal long/normal_01 9 - 14 18 30 0.286
-15 shape long/shape_bunny 0 bunny 15 23 21 0.18
-16 normal long/normal_01 10 - 11 15 15 0.313
-17 normal long/normal_01 11 - 14 20 27 0.325
-18 shape long/shape_star 0 star 18 17 13 0.338
-19 normal long/normal_01 12 - 12 20 16 0.35
-20 normal long/normal_01 13 - 20 25 33 0.461
-21 shape long/shape_fish 0 fish 19 10 10 0.373
-22 normal long/normal_01 14 - 18 24 42 0.384
-23 normal long/normal_01 15 - 14 20 33 0.394
-24 shape long/shape_house 0 house 20 19 24 0.405
-25 normal long/normal_01 16 - 13 21 29 0.295
-26 normal long/normal_01 17 - 14 22 23 0.425
-27 shape long/shape_tree 0 tree 20 23 18 0.435
-28 normal long/normal_01 18 - 19 27 41 0.444
-29 normal long/normal_01 19 - 17 23 31 0.454
-30 shape long/shape_apple 0 apple 23 25 32 0.563
-31 normal long/normal_01 20 - 15 20 14 0.471
-32 normal long/normal_01 21 - 21 28 32 0.48
-33 shape long/shape_cupcake 0 cupcake 21 29 28 0.488
-34 normal long/normal_01 22 - 19 28 25 0.496
-35 normal long/normal_01 23 - 13 21 22 0.384
-36 shape long/shape_icecream 0 icecream 19 33 29 0.512
-37 normal long/normal_01 24 - 19 25 34 0.519
-38 normal long/normal_02 0 - 20 29 38 0.526
-39 shape long/shape_mushroom 0 mushroom 22 22 14 0.533
-40 normal long/normal_02 1 - 24 33 35 0.64
-41 normal long/normal_02 2 - 18 26 35 0.547
-42 shape long/shape_leaf 0 leaf 20 35 29 0.553
-43 normal long/normal_02 3 - 20 25 35 0.56
-44 normal long/normal_02 4 - 17 27 24 0.566
-45 shape long/shape_flower 0 flower 20 29 35 0.452
-46 normal long/normal_02 5 - 24 30 46 0.578
-47 normal long/normal_02 6 - 19 27 29 0.584
-48 shape long/shape_moon 0 moon 23 27 22 0.589
-49 normal long/normal_02 7 - 20 28 23 0.595
-50 normal long/normal_02 8 - 22 29 28 0.7
-51 shape long/shape_cloud 0 cloud 24 15 19 0.605
-52 normal long/normal_02 9 - 21 32 34 0.61
-53 normal long/normal_02 10 - 19 30 30 0.616
-54 shape long/shape_sailboat 0 sailboat 24 22 16 0.621
-55 normal long/normal_02 11 - 16 23 22 0.506
-56 normal long/normal_02 12 - 21 33 37 0.631
-57 shape long/shape_umbrella 0 umbrella 24 24 18 0.635
-58 normal long/normal_02 13 - 19 31 41 0.64
-59 normal long/normal_02 14 - 22 32 41 0.645
-60 shape long/shape_crown 0 crown 27 23 19 0.75
-61 normal long/normal_02 15 - 22 28 28 0.654
-62 normal long/normal_02 16 - 22 32 37 0.659
-63 shape long/shape_key 0 key 18 38 16 0.663
-64 normal long/normal_02 17 - 20 33 31 0.668
-65 normal long/normal_02 18 - 20 29 28 0.552
-66 shape long/shape_lock 0 lock 25 35 36 0.677
-67 normal long/normal_02 19 - 20 30 34 0.681
-68 normal long/normal_02 20 - 23 33 45 0.685
-69 shape long/shape_rocket 0 rocket 25 34 23 0.689
-70 normal long/normal_02 21 - 28 36 39 0.793
-71 normal long/normal_02 22 - 23 35 36 0.697
-72 shape long/shape_cherry 0 cherry 26 32 24 0.701
-73 normal long/normal_02 23 - 19 32 30 0.705
-74 normal long/normal_02 24 - 24 32 38 0.709
-75 shape long/shape_pear 0 pear 22 36 40 0.593
-76 normal long/normal_03 0 - 21 30 26 0.717
-77 normal long/normal_03 1 - 22 34 27 0.721
-78 shape long/shape_strawberry 0 strawberry 26 35 33 0.725
-79 normal long/normal_03 2 - 25 34 49 0.728
-80 normal long/normal_03 3 - 29 37 44 0.832
-81 shape long/shape_bulb 0 bulb 26 41 38 0.736
-82 normal long/normal_03 4 - 24 34 36 0.739
-83 normal long/normal_03 5 - 22 32 29 0.743
-84 shape long/shape_butterfly 0 butterfly 26 21 25 0.746
-85 normal long/normal_03 6 - 20 31 40 0.63
-86 normal long/normal_03 7 - 22 36 35 0.753
-87 shape long/shape_duck 0 duck 27 19 16 0.756
-88 normal long/normal_03 8 - 18 30 22 0.76
-89 normal long/normal_03 9 - 25 31 31 0.763
-90 shape long/shape_owl 0 owl 29 41 49 0.866
-91 normal long/normal_03 10 - 22 31 33 0.769
-92 normal long/normal_03 11 - 21 32 28 0.773
-93 shape long/shape_whale 0 whale 27 23 21 0.776
-94 normal long/normal_03 12 - 20 32 37 0.779
-95 normal long/normal_03 13 - 23 30 35 0.662
-96 shape long/shape_turtle 0 turtle 27 33 26 0.785
-97 normal long/normal_03 14 - 24 38 41 0.788
-98 normal long/normal_03 15 - 28 36 48 0.791
-99 shape long/shape_snail 0 snail 27 20 15 0.794
-100 normal long/normal_03 16 - 30 42 62 0.897
-101 normal long/normal_03 17 - 26 33 46 0.8
-102 shape long/shape_cactus 0 cactus 28 42 35 0.802
-103 normal long/normal_03 18 - 26 37 40 0.805
-104 normal long/normal_03 19 - 27 38 39 0.808
-105 shape long/shape_note 0 note 25 30 23 0.691
-106 normal long/normal_03 20 - 30 38 51 0.814
-107 normal long/normal_03 21 - 22 35 39 0.816
-108 shape long/shape_diamond 0 diamond 28 26 24 0.819
-109 normal long/normal_03 22 - 25 38 34 0.822
-110 normal long/normal_03 23 - 27 43 47 0.924
-111 shape long/shape_sun 0 sun 28 28 22 0.827
-112 normal long/normal_03 24 - 21 34 29 0.83
-113 normal long/normal_04 0 - 22 36 46 0.832
-114 shape long/shape_bulb 1 bulb 28 44 41 0.835
-115 normal long/normal_04 1 - 28 35 58 0.717
-116 normal long/normal_04 2 - 25 36 46 0.84
-117 shape long/shape_crown 1 crown 28 25 29 0.843
-118 normal long/normal_04 3 - 26 34 41 0.845
-119 normal long/normal_04 4 - 31 39 41 0.848
-120 shape long/shape_rocket 1 rocket 31 41 19 0.95
-121 normal long/normal_04 5 - 25 40 47 0.852
-122 normal long/normal_04 6 - 28 38 41 0.855
-123 shape long/shape_icecream 1 icecream 25 45 31 0.857
-124 normal long/normal_04 7 - 26 38 47 0.86
-125 normal long/normal_04 8 - 21 33 33 0.742
-126 shape long/shape_duck 1 duck 29 20 17 0.864
-127 normal long/normal_04 9 - 28 41 49 0.867
-128 normal long/normal_04 10 - 25 37 38 0.869
-129 shape long/shape_cloud 1 cloud 29 18 21 0.871
-130 normal long/normal_04 11 - 29 42 41 0.973
-131 normal long/normal_04 12 - 22 36 38 0.876
-132 shape long/shape_strawberry 1 strawberry 29 39 38 0.878
-133 normal long/normal_04 13 - 29 39 57 0.88
-134 normal long/normal_04 14 - 24 38 29 0.882
-135 shape long/shape_turtle 1 turtle 27 33 25 0.764
-136 normal long/normal_04 15 - 26 40 43 0.886
-137 normal long/normal_04 16 - 25 35 33 0.888
-138 shape long/shape_umbrella 1 umbrella 29 29 17 0.89
-139 normal long/normal_04 17 - 28 37 52 0.892
-140 normal long/normal_04 18 - 26 34 32 0.994
-141 shape long/shape_heart 1 heart 30 29 24 0.896
-142 normal long/normal_04 19 - 28 36 36 0.898
-143 normal long/normal_04 20 - 26 33 30 0.9
-144 shape long/shape_house 1 house 30 29 23 0.902
-145 normal long/normal_04 21 - 26 37 38 0.784
-146 normal long/normal_04 22 - 26 40 41 0.906
-147 shape long/shape_cupcake 1 cupcake 30 41 32 0.908
-148 normal long/normal_04 23 - 31 40 39 0.91
-149 normal long/normal_04 24 - 24 38 42 0.911
-150 shape long/shape_cat 1 cat 31 38 43 1
-151 normal long/normal_05 0 - 23 38 41 0.915
-152 normal long/normal_05 1 - 26 37 39 0.917
-153 shape long/shape_sailboat 1 sailboat 30 28 22 0.919
-154 normal long/normal_05 2 - 29 37 41 0.921
-155 normal long/normal_05 3 - 28 35 48 0.802
-156 shape long/shape_bunny 1 bunny 30 47 47 0.924
-157 normal long/normal_05 4 - 31 39 41 0.926
-158 normal long/normal_05 5 - 28 41 37 0.928
-159 shape long/shape_flower 1 flower 30 44 44 0.929
-160 normal long/normal_05 6 - 27 38 48 1
-161 normal long/normal_05 7 - 29 38 50 0.933
-162 shape long/shape_tree 1 tree 30 34 28 0.934
-163 normal long/normal_05 8 - 24 36 41 0.936
-164 normal long/normal_05 9 - 27 42 37 0.938
-165 shape long/shape_pear 1 pear 26 44 37 0.82
-166 normal long/normal_05 10 - 22 37 38 0.941
-167 normal long/normal_05 11 - 30 38 33 0.943
-168 shape long/shape_whale 1 whale 31 26 21 0.945
-169 normal long/normal_05 12 - 25 37 31 0.946
-170 normal long/normal_05 13 - 31 41 51 1
-171 shape long/shape_fish 1 fish 31 15 15 0.95
-172 normal long/normal_05 14 - 31 43 41 0.951
-173 normal long/normal_05 15 - 29 41 39 0.953
-174 shape long/shape_lock 1 lock 31 43 41 0.955
-175 normal long/normal_05 16 - 29 40 41 0.836
-176 normal long/normal_05 17 - 28 36 52 0.958
-177 shape long/shape_paw 1 paw 31 27 23 0.96
-178 normal long/normal_05 18 - 28 38 31 0.961
-179 normal long/normal_05 19 - 31 40 46 0.963
-180 shape long/shape_apple 1 apple 31 34 31 1
-181 normal long/normal_05 20 - 27 37 38 0.966
-182 normal long/normal_05 21 - 27 36 32 0.968
-183 shape long/shape_sun 1 sun 31 31 25 0.97
-184 normal long/normal_05 22 - 25 39 34 0.972
-185 normal long/normal_05 23 - 28 37 36 0.853
-186 shape long/shape_butterfly 1 butterfly 31 25 28 0.975
-187 normal long/normal_05 24 - 29 37 40 0.977
-188 normal long/normal_06 0 - 25 41 39 0.978
-189 shape long/shape_owl 1 owl 31 44 49 0.98
-190 normal long/normal_06 1 - 24 39 35 1
-191 normal long/normal_06 2 - 31 42 58 0.984
-192 shape long/shape_moon 1 moon 31 37 27 0.985
-193 normal long/normal_06 3 - 31 45 50 0.987
-194 normal long/normal_06 4 - 28 37 40 0.989
-195 shape long/shape_hourglass 1 hourglass 29 45 42 0.871
-196 normal long/normal_06 5 - 27 40 47 0.993
-197 normal long/normal_06 6 - 28 43 50 0.994
-198 shape long/shape_cherry 1 cherry 31 40 31 0.996
-199 normal long/normal_06 7 - 30 38 38 0.998
-200 normal long/normal_06 8 - 25 38 38 1
-201 shape long/shape_star 1 star 31 30 20 1
-202 normal long/normal_06 9 - 31 46 49 1
-203 normal long/normal_06 10 - 27 44 48 1
-204 shape long/shape_note 1 note 31 37 26 1
-205 normal long/normal_06 11 - 31 40 46 0.88
-206 normal long/normal_06 12 - 25 37 35 1
-207 shape long/shape_snail 1 snail 31 23 21 1
-208 normal long/normal_06 13 - 31 41 46 1
-209 normal long/normal_06 14 - 29 42 61 1
-210 shape long/shape_key 1 key 22 49 24 1
-211 normal long/normal_06 15 - 28 39 40 1
-212 normal long/normal_06 16 - 31 45 47 1
-213 shape long/shape_cactus 1 cactus 31 48 42 1
-214 normal long/normal_06 17 - 30 42 40 1
-215 normal long/normal_06 18 - 27 39 38 0.88
-216 shape long/shape_mushroom 1 mushroom 31 31 30 1
-217 normal long/normal_06 19 - 31 44 48 1
-218 normal long/normal_06 20 - 31 46 46 1
-219 shape long/shape_leaf 1 leaf 28 49 40 1
-220 normal long/normal_06 21 - 31 40 44 1
-221 normal long/normal_06 22 - 28 46 41 1
-222 shape long/shape_diamond 1 diamond 31 30 27 1
-223 normal long/normal_06 23 - 29 45 52 1
-224 normal long/normal_06 24 - 28 40 41 1
-225 shape long/shape_heart 2 heart 29 29 31 0.88
-226 normal long/normal_07 0 - 27 41 40 1
-227 normal long/normal_07 1 - 27 43 45 1
-228 shape long/shape_moon 2 moon 31 38 26 1
-229 normal long/normal_07 2 - 29 37 38 1
-230 normal long/normal_07 3 - 28 39 46 1
-231 shape long/shape_pear 2 pear 29 49 37 1
-232 normal long/normal_07 4 - 25 40 42 1
-233 normal long/normal_07 5 - 31 39 40 1
-234 shape long/shape_hourglass 2 hourglass 31 49 45 1
-235 normal long/normal_07 6 - 28 38 40 0.88
-236 normal long/normal_07 7 - 27 39 41 1
-237 shape long/shape_sun 2 sun 31 32 29 1
-238 normal long/normal_07 8 - 31 41 50 1
-239 normal long/normal_07 9 - 27 39 38 1
-240 shape long/shape_turtle 2 turtle 31 39 30 1
-241 normal long/normal_07 10 - 28 41 41 1
-242 normal long/normal_07 11 - 31 45 54 1
-243 shape long/shape_apple 2 apple 31 34 36 1
-244 normal long/normal_07 12 - 30 40 50 1
-245 normal long/normal_07 13 - 29 39 48 0.88
-246 shape long/shape_cactus 2 cactus 31 48 37 1
-247 normal long/normal_07 14 - 28 39 38 1
-248 normal long/normal_07 15 - 24 38 37 1
-249 shape long/shape_fish 2 fish 31 16 16 1
-250 normal long/normal_07 16 - 26 38 38 1
-251 normal long/normal_07 17 - 31 39 40 1
-252 shape long/shape_diamond 2 diamond 31 30 21 1
-253 normal long/normal_07 18 - 31 41 39 1
-254 normal long/normal_07 19 - 28 38 35 1
-255 shape long/shape_tree 2 tree 29 33 27 0.88
-256 normal long/normal_07 20 - 25 39 47 1
-257 normal long/normal_07 21 - 23 38 29 1
-258 shape long/shape_butterfly 2 butterfly 31 25 29 1
-259 normal long/normal_07 22 - 28 41 43 1
-260 normal long/normal_07 23 - 31 43 49 1
-261 shape long/shape_owl 2 owl 31 45 42 1
-262 normal long/normal_07 24 - 31 45 56 1
-263 normal long/normal_08 0 - 29 42 43 1
-264 shape long/shape_cupcake 2 cupcake 31 44 42 1
-265 normal long/normal_08 1 - 28 42 57 0.88
-266 normal long/normal_08 2 - 31 43 54 1
-267 shape long/shape_umbrella 2 umbrella 31 32 23 1
-268 normal long/normal_08 3 - 25 41 34 1
-269 normal long/normal_08 4 - 24 39 36 1
-270 shape long/shape_star 2 star 31 30 19 1
-271 normal long/normal_08 5 - 31 43 50 1
-272 normal long/normal_08 6 - 28 41 42 1
-273 shape long/shape_cherry 2 cherry 31 40 36 1
-274 normal long/normal_08 7 - 31 39 42 1
-275 normal long/normal_08 8 - 25 38 39 0.88
-276 shape long/shape_crown 2 crown 31 28 23 1
-277 normal long/normal_08 9 - 29 39 40 1
-278 normal long/normal_08 10 - 26 41 41 1
-279 shape long/shape_lock 2 lock 31 44 45 1
-280 normal long/normal_08 11 - 28 42 49 1
-281 normal long/normal_08 12 - 28 39 43 1
-282 shape long/shape_whale 2 whale 31 27 17 1
-283 normal long/normal_08 13 - 28 41 42 1
-284 normal long/normal_08 14 - 25 37 37 1
-285 shape long/shape_flower 2 flower 29 42 38 0.88
-286 normal long/normal_08 15 - 31 43 54 1
-287 normal long/normal_08 16 - 25 37 33 1
-288 shape long/shape_icecream 2 icecream 28 49 37 1
-289 normal long/normal_08 17 - 31 46 49 1
-290 normal long/normal_08 18 - 31 44 49 1
-291 shape long/shape_key 2 key 22 49 19 1
-292 normal long/normal_08 19 - 27 42 40 1
-293 normal long/normal_08 20 - 29 39 43 1
-294 shape long/shape_leaf 2 leaf 28 49 40 1
-295 normal long/normal_08 21 - 29 37 39 0.88
-296 normal long/normal_08 22 - 26 39 47 1
-297 shape long/shape_rocket 2 rocket 31 42 27 1
-298 normal long/normal_08 23 - 29 39 41 1
-299 normal long/normal_08 24 - 29 42 48 1
-300 shape long/shape_bulb 2 bulb 31 49 47 1
-301 normal long/normal_09 0 - 26 38 38 1
-302 normal long/normal_09 1 - 31 42 46 1
-303 shape long/shape_strawberry 2 strawberry 31 42 37 1
-304 normal long/normal_09 2 - 25 39 33 1
-305 normal long/normal_09 3 - 27 38 33 0.88
-306 shape long/shape_paw 2 paw 31 28 22 1
-307 normal long/normal_09 4 - 29 40 53 1
-308 normal long/normal_09 5 - 27 40 42 1
-309 shape long/shape_sailboat 2 sailboat 31 30 24 1
-310 normal long/normal_09 6 - 29 43 48 1
-311 normal long/normal_09 7 - 28 41 42 1
-312 shape long/shape_duck 2 duck 31 22 18 1
-313 normal long/normal_09 8 - 31 46 47 1
-314 normal long/normal_09 9 - 28 40 38 1
-315 shape long/shape_bunny 2 bunny 29 46 41 0.88
-316 normal long/normal_09 10 - 31 46 55 1
-317 normal long/normal_09 11 - 23 38 37 1
-318 shape long/shape_cat 2 cat 31 38 40 1
-319 normal long/normal_09 12 - 26 41 38 1
-320 normal long/normal_09 13 - 28 37 40 1
-321 shape long/shape_house 2 house 31 31 27 1
-322 normal long/normal_09 14 - 30 41 55 1
-323 normal long/normal_09 15 - 27 37 33 1
-324 shape long/shape_note 2 note 31 37 30 1
-325 normal long/normal_09 16 - 30 39 49 0.88
-326 normal long/normal_09 17 - 29 38 43 1
-327 shape long/shape_mushroom 2 mushroom 31 31 22 1
-328 normal long/normal_09 18 - 31 44 50 1
-329 normal long/normal_09 19 - 30 44 40 1
-330 shape long/shape_snail 2 snail 31 23 21 1
-331 normal long/normal_09 20 - 25 42 39 1
-332 normal long/normal_09 21 - 28 43 39 1
-333 shape long/shape_cloud 2 cloud 31 20 18 1
+# Level index (Arrow/Long Levels/Build Full Level Set): level file indexInFile shapeKey cols rows arrowCount d
+1 long/pack_001 0 heart 17 16 17 0
+2 long/pack_001 1 drop 14 21 14 0.022
+3 long/pack_001 2 diamond 18 17 12 0.045
+4 long/pack_001 3 cloud 21 13 16 0.069
+5 long/pack_001 4 apple 15 16 14 0
+6 long/pack_001 5 cactus 14 21 18 0.117
+7 long/pack_001 6 bee 20 15 19 0.141
+8 long/pack_001 7 sun 19 19 22 0.165
+9 long/pack_001 8 drum 19 22 19 0.188
+10 long/pack_001 9 train 18 17 15 0.31
+11 long/pack_001 10 crab 21 16 20 0.231
+12 long/pack_001 11 shield 16 20 24 0.251
+13 long/pack_001 12 guitar 13 25 19 0.269
+14 long/pack_001 13 key 13 27 16 0.286
+15 long/pack_001 14 fox 17 19 26 0.18
+16 long/pack_001 15 leaf 16 27 20 0.313
+17 long/pack_001 16 flower 18 25 32 0.325
+18 long/pack_001 17 bulb 18 28 28 0.338
+19 long/pack_001 18 horse 21 20 20 0.35
+20 long/pack_001 19 spider 21 21 20 0.461
+21 long/pack_001 20 trophy 19 20 13 0.373
+22 long/pack_001 21 bunny 19 29 25 0.384
+23 long/pack_001 22 lotus 19 17 23 0.394
+24 long/pack_001 23 tent 21 19 19 0.405
+25 long/pack_001 24 bus 21 13 22 0.295
+26 long/pack_002 0 dolphin 26 14 12 0.425
+27 long/pack_002 1 note 20 24 19 0.435
+28 long/pack_002 2 castle 20 19 13 0.444
+29 long/pack_002 3 starfish 21 21 21 0.454
+30 long/pack_002 4 cupcake 23 31 42 0.563
+31 long/pack_002 5 parrot 19 32 26 0.471
+32 long/pack_002 6 pear 19 32 39 0.48
+33 long/pack_002 7 seahorse 20 33 26 0.488
+34 long/pack_002 8 rooster 21 19 19 0.496
+35 long/pack_002 9 moon 19 22 23 0.384
+36 long/pack_002 10 turtle 22 26 21 0.512
+37 long/pack_002 11 headphones 24 18 14 0.519
+38 long/pack_002 12 hotairballoon 22 28 27 0.526
+39 long/pack_002 13 lightning 22 33 23 0.533
+40 long/pack_002 14 lock 24 34 37 0.64
+41 long/pack_002 15 pineapple 22 35 34 0.547
+42 long/pack_002 16 anchor 23 23 15 0.553
+43 long/pack_002 17 butterfly 23 18 24 0.56
+44 long/pack_002 18 carrot 16 35 24 0.566
+45 long/pack_002 19 umbrella 20 20 21 0.452
+46 long/pack_002 20 dragon 23 19 17 0.578
+47 long/pack_002 21 sailboat 23 22 20 0.584
+48 long/pack_002 22 lion 23 23 24 0.589
+49 long/pack_002 23 windmill 23 33 30 0.595
+50 long/pack_002 24 owl 26 36 32 0.7
+51 long/pack_003 0 giraffe 24 29 16 0.605
+52 long/pack_003 1 tajmahal 24 24 25 0.61
+53 long/pack_003 2 clover 24 25 20 0.616
+54 long/pack_003 3 bat 24 14 11 0.621
+55 long/pack_003 4 snake 22 22 16 0.506
+56 long/pack_003 5 kite 22 37 31 0.631
+57 long/pack_003 6 gift 24 29 30 0.635
+58 long/pack_003 7 rocket 24 32 20 0.64
+59 long/pack_003 8 temple 26 29 18 0.645
+60 long/pack_003 9 fish 27 17 13 0.75
+61 long/pack_003 10 circle 25 24 26 0.654
+62 long/pack_003 11 dinosaur 25 20 10 0.659
+63 long/pack_003 12 strawberry 25 33 35 0.663
+64 long/pack_003 13 submarine 25 17 14 0.668
+65 long/pack_003 14 cherry 23 28 25 0.552
+66 long/pack_003 15 crown 25 22 17 0.677
+67 long/pack_003 16 monkey 25 20 14 0.681
+68 long/pack_003 17 squirrel 27 32 32 0.685
+69 long/pack_003 18 balloon 25 38 33 0.689
+70 long/pack_003 19 cup 27 27 30 0.793
+71 long/pack_003 20 paw 25 23 25 0.697
+72 long/pack_003 21 helicopter 26 18 13 0.701
+73 long/pack_003 22 shark 26 18 14 0.705
+74 long/pack_003 23 peacock 26 23 17 0.709
+75 long/pack_003 24 snowflake 23 26 22 0.593
+76 long/pack_004 0 octopus 26 23 26 0.717
+77 long/pack_004 1 penguin 26 29 30 0.721
+78 long/pack_004 2 lighthouse 26 25 20 0.725
+79 long/pack_004 3 bicycle 26 18 18 0.728
+80 long/pack_004 4 hourglass 28 44 50 0.832
+81 long/pack_004 5 snail 26 19 16 0.736
+82 long/pack_004 6 bear 26 25 24 0.739
+83 long/pack_004 7 tree 26 30 30 0.743
+84 long/pack_004 8 jellyfish 26 32 37 0.746
+85 long/pack_004 9 house 24 24 17 0.63
+86 long/pack_004 10 icecream 23 41 37 0.753
+87 long/pack_004 11 camera 27 17 20 0.756
+88 long/pack_004 12 cow 27 18 17 0.76
+89 long/pack_004 13 frog 27 21 21 0.763
+90 long/pack_004 14 bell 29 31 25 0.866
+91 long/pack_004 15 duck 27 19 14 0.769
+92 long/pack_004 16 mushroom 27 26 27 0.773
+93 long/pack_004 17 diya 27 25 16 0.776
+94 long/pack_004 18 star 27 26 18 0.779
+95 long/pack_004 19 plane 25 24 14 0.662
+96 long/pack_004 20 car 27 18 14 0.785
+97 long/pack_004 21 dog 27 19 20 0.788
+98 long/pack_004 22 elephant 27 19 19 0.791
+99 long/pack_004 23 whale 27 24 20 0.794
+100 long/pack_004 24 cat 30 39 44 0.897
+101 long/pack_005 0 lion~flip 28 28 23 0.8
+102 long/pack_005 1 lotus~thick 31 27 29 0.802
+103 long/pack_005 2 giraffe~mirror 28 34 22 0.805
+104 long/pack_005 3 petals-1000587691 28 28 23 0.808
+105 long/pack_005 4 carrot~mirror 18 39 27 0.691
+106 long/pack_005 5 bus~hollow 28 16 17 0.814
+107 long/pack_005 6 fox~scale 22 24 15 0.816
+108 long/pack_005 7 blob-2755733023 28 25 24 0.819
+109 long/pack_005 8 helicopter~mirror 28 20 17 0.822
+110 long/pack_005 9 dragon~rot90 30 37 27 0.924
+111 long/pack_005 10 cactus~mirror 28 43 36 0.827
+112 long/pack_005 11 mandala-2819216354 28 28 30 0.83
+113 long/pack_005 12 hourglass~rot90 28 18 19 0.832
+114 long/pack_005 13 trophy~hollow 28 29 24 0.835
+115 long/pack_005 14 pineapple~thin 25 40 32 0.717
+116 long/pack_005 15 petals-3800854293 28 32 21 0.84
+117 long/pack_005 16 dolphin~rot90 23 44 28 0.843
+118 long/pack_005 17 rocket~hollow 28 38 22 0.845
+119 long/pack_005 18 octopus~thick 31 27 27 0.848
+120 long/pack_005 19 blob-637132383 31 27 25 0.95
+121 long/pack_005 20 anchor~thick 31 31 28 0.852
+122 long/pack_005 21 note~hollow 29 34 16 0.855
+123 long/pack_005 22 rooster~rot90 29 32 23 0.857
+124 long/pack_005 23 mandala-1923506043 29 28 22 0.86
+125 long/pack_005 24 clover~thick 28 30 26 0.742
+126 long/pack_006 0 bulb~thick 31 47 52 0.864
+127 long/pack_006 1 paw~rot90 29 32 34 0.867
+128 long/pack_006 2 petals-3489034881 29 29 30 0.869
+129 long/pack_006 3 horse~hollow 29 27 16 0.871
+130 long/pack_006 4 sailboat~thick 31 31 31 0.973
+131 long/pack_006 5 strawberry~mirror 29 39 41 0.876
+132 long/pack_006 6 blob-4236393069 29 28 22 0.878
+133 long/pack_006 7 dog~rot90 29 43 43 0.88
+134 long/pack_006 8 gift~hollow 29 35 43 0.882
+135 long/pack_006 9 train~rot90 27 28 27 0.764
+136 long/pack_006 10 mandala-2158519316 29 26 24 0.886
+137 long/pack_006 11 diamond~thick 31 30 35 0.888
+138 long/pack_006 12 fish~rot90 28 46 29 0.89
+139 long/pack_006 13 tent~mirror 29 28 21 0.892
+140 long/pack_006 14 petals-2967971288 31 28 27 0.994
+141 long/pack_006 15 shield~flip 30 36 29 0.896
+142 long/pack_006 16 cup~rot90 30 30 20 0.898
+143 long/pack_006 17 squirrel~thick 31 38 43 0.9
+144 long/pack_006 18 blob-1460914752 30 28 22 0.902
+145 long/pack_006 19 spider~thick 29 29 31 0.784
+146 long/pack_006 20 bicycle~mirror 30 20 18 0.906
+147 long/pack_006 21 butterfly~flip 30 24 27 0.908
+148 long/pack_006 22 mandala-1300631886 30 29 26 0.91
+149 long/pack_006 23 crab~thick 31 26 34 0.911
+150 long/pack_006 24 guitar~thin 25 49 25 1
+151 long/pack_007 0 monkey~thick 31 26 21 0.915
+152 long/pack_007 1 petals-1839434994 30 26 19 0.917
+153 long/pack_007 2 duck~mirror 30 21 18 0.919
+154 long/pack_007 3 star~flip 30 29 20 0.921
+155 long/pack_007 4 kite~thick 27 45 47 0.802
+156 long/pack_007 5 blob-1970965843 30 30 20 0.924
+157 long/pack_007 6 leaf~rot90 30 18 15 0.926
+158 long/pack_007 7 temple~thick 31 36 34 0.928
+159 long/pack_007 8 hotairballoon~hollow 30 39 37 0.929
+160 long/pack_007 9 mandala-1679585306 31 32 28 1
+161 long/pack_007 10 cherry~thick 31 40 33 0.933
+162 long/pack_007 11 starfish~hollow 30 30 24 0.934
+163 long/pack_007 12 tree~hollow 30 34 26 0.936
+164 long/pack_007 13 petals-3975982752 30 30 34 0.938
+165 long/pack_007 14 diya~thick 30 27 21 0.82
+166 long/pack_007 15 bat~thick 31 19 18 0.941
+167 long/pack_007 16 sun~thick 31 32 34 0.943
+168 long/pack_007 17 blob-448340108 31 27 26 0.945
+169 long/pack_007 18 flower~scale 24 35 24 0.946
+170 long/pack_007 19 cat~thin 31 42 31 1
+171 long/pack_007 20 car~rot90 31 46 44 0.95
+172 long/pack_007 21 mandala-3229843376 31 30 29 0.951
+173 long/pack_007 22 umbrella~hollow 31 31 23 0.953
+174 long/pack_007 23 bee~rot90 31 43 41 0.955
+175 long/pack_007 24 owl~rot90 28 20 17 0.836
+176 long/pack_008 0 petals-2747423478 31 31 34 0.958
+177 long/pack_008 1 seahorse~hollow 29 48 35 0.96
+178 long/pack_008 2 turtle~rot90 31 26 24 0.961
+179 long/pack_008 3 lock~rot90 31 22 23 0.963
+180 long/pack_008 4 blob-1809935531 31 30 27 1
+181 long/pack_008 5 cow~thick 31 23 30 0.966
+182 long/pack_008 6 snake~mirror 31 32 20 0.968
+183 long/pack_008 7 cloud~mirror 31 19 20 0.97
+184 long/pack_008 8 mandala-267558054 31 30 29 0.972
+185 long/pack_008 9 elephant~mirror 29 19 19 0.853
+186 long/pack_008 10 drum~hollow 31 35 33 0.975
+187 long/pack_008 11 pear~thin 29 49 37 0.977
+188 long/pack_008 12 petals-705789530 31 30 24 0.978
+189 long/pack_008 13 heart~rot90 31 34 28 0.98
+190 long/pack_008 14 plane~thick 31 33 25 1
+191 long/pack_008 15 tajmahal~flip 31 32 32 0.984
+192 long/pack_008 16 blob-2428749235 31 31 23 0.985
+193 long/pack_008 17 whale~thick 31 29 25 0.987
+194 long/pack_008 18 shark~thick 31 23 21 0.989
+195 long/pack_008 19 peacock~rot90 29 32 25 0.871
+196 long/pack_008 20 mandala-2801132283 31 30 28 0.993
+197 long/pack_008 21 lightning~hollow 31 47 30 0.994
+198 long/pack_008 22 bear~rot90 31 34 26 0.996
+199 long/pack_008 23 snail~thick 31 25 31 0.998
+200 long/pack_008 24 petals-4253721617 31 30 25 1
+201 long/pack_009 0 submarine~thick 31 23 22 1
+202 long/pack_009 1 drop~flip 31 48 41 1
+203 long/pack_009 2 dinosaur~thick 31 28 21 1
+204 long/pack_009 3 blob-1163657213 31 36 31 1
+205 long/pack_009 4 key~thick 23 48 34 0.88
+206 long/pack_009 5 snowflake~flip 31 36 30 1
+207 long/pack_009 6 parrot~scale 24 39 24 1
+208 long/pack_009 7 mandala-1189438478 31 31 28 1
+209 long/pack_009 8 balloon~scale 25 38 27 1
+210 long/pack_009 9 cupcake~hollow 31 44 32 1
+211 long/pack_009 10 headphones~thick 31 26 17 1
+212 long/pack_009 11 petals-3288134901 31 28 23 1
+213 long/pack_009 12 moon~hollow 31 38 24 1
+214 long/pack_009 13 camera~hollow 31 20 23 1
+215 long/pack_009 14 lighthouse~rot90 29 30 22 0.88
+216 long/pack_009 15 blob-2937359371 31 32 31 1
+217 long/pack_009 16 mushroom~hollow 31 31 23 1
+218 long/pack_009 17 house~hollow 31 32 25 1
+219 long/pack_009 18 bell~flip 31 34 25 1
+220 long/pack_009 19 mandala-2409919324 31 31 31 1
+221 long/pack_009 20 windmill~hollow 31 45 36 1
+222 long/pack_009 21 icecream~mirror 28 49 38 1
+223 long/pack_009 22 castle~rot90 31 34 39 1
+224 long/pack_009 23 petals-2532244223 31 32 25 1
+225 long/pack_009 24 crown~thick 31 28 30 0.88
+226 long/pack_010 0 bunny~thin 31 49 35 1
+227 long/pack_010 1 penguin~rot90 31 28 29 1
+228 long/pack_010 2 blob-2927833344 31 32 21 1
+229 long/pack_010 3 frog~thin 31 24 14 1
+230 long/pack_010 4 apple~mirror 31 35 36 1
+231 long/pack_010 5 circle~rot90 31 33 30 1
+232 long/pack_010 6 mandala-2356576910 31 31 28 1
+233 long/pack_010 7 jellyfish~rot90 31 26 27 1
+234 long/pack_010 8 crab~thick 31 27 26 1
+235 long/pack_010 9 giraffe~mirror 29 36 21 0.88
+236 long/pack_010 10 petals-134292972 31 32 26 1
+237 long/pack_010 11 shield~rot90 31 26 23 1
+238 long/pack_010 12 strawberry~rot90 31 24 21 1
+239 long/pack_010 13 pineapple~flip 31 49 50 1
+240 long/pack_010 14 blob-4138781830 31 29 20 1
+241 long/pack_010 15 anchor~rot90 31 32 17 1
+242 long/pack_010 16 guitar~flip 25 49 33 1
+243 long/pack_010 17 key~mirror 22 49 25 1
+244 long/pack_010 18 mandala-3430190050 31 32 31 1
+245 long/pack_010 19 rocket~hollow 29 39 22 0.88
+246 long/pack_010 20 spider~rot90 31 32 27 1
+247 long/pack_010 21 gift~flip 31 38 39 1
+248 long/pack_010 22 petals-369398713 31 32 31 1
+249 long/pack_010 23 snake~mirror 31 33 22 1
+250 long/pack_010 24 fish~rot90 31 49 38 1
+251 long/pack_011 0 bus~mirror 31 19 19 1
+252 long/pack_011 1 blob-2164199630 31 30 28 1
+253 long/pack_011 2 sun~thick 31 34 37 1
+254 long/pack_011 3 hourglass~scale 25 39 28 1
+255 long/pack_011 4 flower~hollow 29 42 27 0.88
+256 long/pack_011 5 mandala-2784021933 31 33 30 1
+257 long/pack_011 6 cactus~rot90 31 21 16 1
+258 long/pack_011 7 tent~rot90 31 34 20 1
+259 long/pack_011 8 icecream~rot90 31 18 15 1
+260 long/pack_011 9 petals-2915449026 31 30 20 1
+261 long/pack_011 10 lotus~thin 31 27 21 1
+262 long/pack_011 11 bat~thick 31 19 22 1
+263 long/pack_011 12 dragon~rot90 31 39 28 1
+264 long/pack_011 13 blob-3238495824 31 30 22 1
+265 long/pack_011 14 headphones~rot90 29 39 21 0.88
+266 long/pack_011 15 tajmahal~flip 31 33 28 1
+267 long/pack_011 16 cow 31 21 18 1
+268 long/pack_011 17 mandala-3212220438 31 35 33 1
+269 long/pack_011 18 house~thick 31 34 38 1
+270 long/pack_011 19 sailboat~mirror 31 30 23 1
+271 long/pack_011 20 snowflake~flip 31 36 31 1
+272 long/pack_011 21 petals-2461340619 31 32 23 1
+273 long/pack_011 22 peacock~hollow 31 29 18 1
+274 long/pack_011 23 bell~rot90 31 29 26 1
+275 long/pack_011 24 drum~thin 29 33 18 0.88
+276 long/pack_012 0 blob-1101406749 31 45 49 1
+277 long/pack_012 1 circle~scale 25 24 17 1
+278 long/pack_012 2 parrot~scale 24 39 19 1
+279 long/pack_012 3 balloon~hollow 31 48 28 1
+280 long/pack_012 4 mandala-2868299395 31 33 29 1
+281 long/pack_012 5 helicopter~rot90 31 45 31 1
+282 long/pack_012 6 train~scale 25 24 19 1
+283 long/pack_012 7 owl~scale 25 35 24 1
+284 long/pack_012 8 petals-626252323 31 30 21 1
+285 long/pack_012 9 windmill~thick 31 43 35 0.88
+286 long/pack_012 10 cloud~rot90 30 49 48 1
+287 long/pack_012 11 squirrel~thin 31 38 26 1
+288 long/pack_012 12 blob-2702177501 31 32 19 1
+289 long/pack_012 13 bicycle~mirror 31 21 19 1
+290 long/pack_012 14 snail~hollow 31 23 21 1
+291 long/pack_012 15 crown~flip 31 28 27 1
+292 long/pack_012 16 mandala-3364629573 31 31 31 1
+293 long/pack_012 17 trophy~thick 31 35 30 1
+294 long/pack_012 18 moon~hollow 31 38 21 1
+295 long/pack_012 19 kite~mirror 27 46 31 0.88
+296 long/pack_012 20 petals-3529749112 31 32 20 1
+297 long/pack_012 21 whale~thick 31 29 27 1
+298 long/pack_012 22 bee~hollow 31 23 22 1
+299 long/pack_012 23 umbrella~thick 31 34 28 1
+300 long/pack_012 24 blob-1082040538 31 30 21 1

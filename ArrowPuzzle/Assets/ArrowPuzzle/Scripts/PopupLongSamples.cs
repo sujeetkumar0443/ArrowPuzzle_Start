@@ -37,6 +37,14 @@ namespace ArrowPuzzle
             var shapesBtn = Ui.Btn(navRow, "Shapes screen", Theme.Panel, Theme.PanelText, 16f, 14f, Theme.PanelEdge, 3f, ScreenShapes.Open);
             Ui.Size(shapesBtn, 0f, 44f).flexibleWidth = 1f;
 
+            // dev: all 100 shapes + "jump to level N" (any level, past the release cap too)
+            var preview = Ui.Btn(card, "Shape preview / jump to level", Theme.Accent, Theme.AccentText, 16f, 14f, Theme.AccentShadow, 3f, () =>
+            {
+                GameApp.I.Close("PopupLongSamples");
+                ScreenShapePreview.Open();
+            });
+            Ui.Size(preview, 0f, 44f);
+
             // dev theme switch: applies at once, no purchase check, does not change what the player owns
             Ui.Label(card, "Theme (dev)", 17f, Theme.InkSoft, Weight.Semi);
             for (int r = 0; r < 2; r++)

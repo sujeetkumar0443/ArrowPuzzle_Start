@@ -543,15 +543,20 @@ namespace ArrowPuzzle
         }
 
         /// <summary>
-        /// NEXT (after the interstitial, AfterAd): starts the next global level straight away. After level 150 (or if
-        /// the next level is somehow still locked) it goes back to Home.
+        /// NEXT (after the interstitial, AfterAd): starts the next global level straight away. Past the release cap:
+        /// "More levels coming soon"; if the next level is somehow still locked: Home. A dev jump keeps going.
         /// </summary>
         static void NextLevel()
         {
             int next = GameApp.I.CurrentLevel + 1;
             GameApp.I.Close("PopupWin");
             var game = GameApp.I.Get<ScreenGame>();
-            if (next > LevelPath.Count || !Save.IsUnlocked(next) || game == null)
+            if (Campaign.PastCap(next) && !ScreenGame.DevJump && game != null)
+            {
+                GameApp.I.Show("ScreenComingSoon");
+                return;
+            }
+            if ((!Save.IsUnlocked(next) && !ScreenGame.DevJump) || game == null)
             {
                 GameApp.I.Show("ScreenHome");
                 return;

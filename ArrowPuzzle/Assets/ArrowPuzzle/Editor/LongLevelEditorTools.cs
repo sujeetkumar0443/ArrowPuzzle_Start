@@ -16,22 +16,23 @@ namespace ArrowPuzzle
         static void BuildFullSet()
         {
             if (!EditorUtility.DisplayDialog("Build Full Level Set",
-                    "Generates all " + Campaign.TotalLevels + " campaign levels into " + LongCampaignBuild.OutDir +
-                    " (overwrites). This takes several minutes.", "Build", "Cancel")) return;
+                    "Generates levels 1-" + LongCampaignBuild.PrebuildLevels + " into " + LongCampaignBuild.OutDir +
+                    " (deletes the old level files). This takes a few minutes.", "Build", "Cancel")) return;
             string root = Path.GetDirectoryName(Application.dataPath);
             LongLevelGen.Warn = s => Debug.LogWarning(s);
             string summary;
             try
             {
                 LongCampaignBuild.Run(root, (what, p) => EditorUtility.DisplayProgressBar("Long levels: full set", what, p),
-                                      text => ShapeLevels.VerifyText(text), out summary);
+                                      text => ShapeLevels.VerifyText(text), out summary, LongCampaignBuild.PrebuildLevels,
+                                      s => Debug.LogWarning("[LevelGen] " + s));
             }
             finally
             {
                 EditorUtility.ClearProgressBar();
             }
             AssetDatabase.Refresh();
-            int tail = summary.IndexOf("\n" + Campaign.TotalLevels + " levels:");
+            int tail = summary.IndexOf("\n" + LongCampaignBuild.PrebuildLevels + " levels:");
             string head = "Long levels: full set built -> " + LongCampaignBuild.OutDir + "; summary " + Path.Combine(root, LongCampaignBuild.SummaryFile)
                           + (tail >= 0 ? summary.Substring(tail) : "");
             if (summary.Contains(" FAIL ")) Debug.LogError(head);
@@ -50,25 +51,24 @@ namespace ArrowPuzzle
             else Debug.LogError(report);
         }
 
-        /// <summary>Every campaign file through the game's parser + peel test, plus the index (file, size, arrow counts, all levels present).</summary>
+        /// <summary>
+        /// The prebuilt files through the game's parser + peel test and the index (file, key, arrow count, every level
+        /// 1..PrebuiltCount present), plus every base shape's mask rules and the level plan (no repeats within 20 levels).
+        /// </summary>
         [MenuItem("Arrow/Long Levels/Verify Full Level Set")]
         static void VerifyFullSet()
         {
-            string dir = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Assets/ArrowPuzzle/Resources/Levels");
-            var arrows = new System.Collections.Generic.Dictionary<int, int>();
+            string dir = Path.Combine(Path.GetDirectoryName(Application.dataPath), LongCampaignBuild.OutDir);
             var problems = new StringBuilder();
+            var arrows = new System.Collections.Generic.Dictionary<int, int>();
+            var keys = new System.Collections.Generic.Dictionary<int, string>();
             int pass = 0, seen = 0;
-            var files = new System.Collections.Generic.SortedSet<string>();
-            for (int g = 1; g <= Campaign.TotalLevels; g++) files.Add(Campaign.FileOf(g));
-            foreach (var name in files)
+            foreach (var file in Directory.GetFiles(dir, "pack_*.txt"))
             {
-                string file = Path.Combine(dir, name + ".txt");
-                if (!File.Exists(file)) { problems.Append("\n  missing ").Append(file); continue; }
                 string text = File.ReadAllText(file);
                 foreach (var kv in ShapeLevels.VerifyText(text))
                 {
                     seen++;
-                    if (Campaign.FileOf(kv.Key) != name) problems.Append("\n  level ").Append(kv.Key).Append(" is in ").Append(name).Append(".txt");
                     if (kv.Value == null) pass++;
                     else problems.Append("\n  level ").Append(kv.Key).Append(": ").Append(kv.Value);
                 }
@@ -76,28 +76,29 @@ namespace ArrowPuzzle
                 {
                     var p = line.Trim().Split(' ');
                     int g, n;
-                    if (p.Length >= 6 && p[0] == "L" && int.TryParse(p[1], out g) && int.TryParse(p[5], out n)) arrows[g] = n;
+                    if (p.Length >= 6 && p[0] == "L" && int.TryParse(p[1], out g) && int.TryParse(p[5], out n)) { arrows[g] = n; keys[g] = p[2]; }
                 }
             }
             int indexed = 0;
-            string indexFile = Path.Combine(dir, Campaign.Folder.Substring("Levels/".Length), Campaign.IndexFile + ".txt");
+            string indexFile = Path.Combine(dir, Campaign.IndexFile + ".txt");
             if (!File.Exists(indexFile)) problems.Append("\n  missing index.txt");
             else
                 foreach (var line in File.ReadAllLines(indexFile))
                 {
                     var p = line.Trim().Split(' ');
                     int g, n;
-                    if (p.Length < 9 || line.StartsWith("#") || !int.TryParse(p[0], out g) || !int.TryParse(p[7], out n)) continue;
+                    if (line.StartsWith("#") || p.Length < 8 || !int.TryParse(p[0], out g) || !int.TryParse(p[6], out n)) continue;
                     indexed++;
                     int real;
-                    string kind = Campaign.IsShape(g) ? "shape" : "normal";
-                    if (!arrows.TryGetValue(g, out real) || real != n || p[1] != kind || p[2] != Campaign.FileOf(g)
-                        || p[4] != (Campaign.ShapeOfLevel(g) ?? "-"))
+                    string key;
+                    if (!arrows.TryGetValue(g, out real) || real != n || p[1] != Campaign.PackOf(g) || !keys.TryGetValue(g, out key) || key != p[3])
                         problems.Append("\n  index line for level ").Append(g).Append(" does not match its file");
                 }
-            bool ok = pass == Campaign.TotalLevels && seen == Campaign.TotalLevels && indexed == Campaign.TotalLevels && problems.Length == 0;
-            string msg = "Long levels: Verify Full Level Set " + (ok ? "PASS" : "FAIL") + ": " + pass + " / " + Campaign.TotalLevels
-                         + " levels pass the peel test, " + indexed + " index lines" + problems;
+            foreach (var b in LongCampaignBuild.CheckBaseShapes()) problems.Append("\n  shape ").Append(b);
+            foreach (var b in LongCampaignBuild.CheckPlan(1000, 20)) problems.Append("\n  plan: ").Append(b);
+            bool ok = seen > 0 && pass == seen && indexed == seen && problems.Length == 0;
+            string msg = "Long levels: Verify Full Level Set " + (ok ? "PASS" : "FAIL") + ": " + pass + " / " + seen
+                         + " prebuilt levels pass the peel test, " + indexed + " index lines, 100 base shapes and the plan of levels 1-1000 checked" + problems;
             if (ok) Debug.Log(msg);
             else Debug.LogError(msg);
         }
